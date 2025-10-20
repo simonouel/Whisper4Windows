@@ -78,25 +78,16 @@ def setup_cuda_paths():
                         cuda_paths.append(bin_path)
                         logger.info(f"   ✅ Added CUDA version: {cuda_version_dir.name}")
         
-        # Check NVIDIA cuDNN (only if no bundled libraries available)
-        # Skip system cuDNN to avoid version conflicts with bundled libraries
-        bundled_cudnn_available = any(
-            (Path(sys._MEIPASS) / "nvidia" / "cudnn" / "bin").exists() if getattr(sys, 'frozen', False) else False,
-            (appdata / 'Whisper4Windows' / 'gpu_libs' / 'nvidia' / 'cudnn' / 'bin').exists()
-        )
-        
-        if not bundled_cudnn_available:
-            cudnn_dir = program_files / "NVIDIA" / "CUDNN"
-            if cudnn_dir.exists():
-                logger.info(f"🔍 Found cuDNN directory: {cudnn_dir}")
-                for cudnn_version_dir in cudnn_dir.iterdir():
-                    if cudnn_version_dir.is_dir() and cudnn_version_dir.name.startswith('v'):
-                        bin_path = cudnn_version_dir / "bin"
-                        if bin_path.exists():
-                            cuda_paths.append(bin_path)
-                            logger.info(f"   ✅ Added cuDNN version: {cudnn_version_dir.name}")
-        else:
-            logger.info("🔒 Skipping system cuDNN to avoid version conflicts with bundled libraries")
+        # Check NVIDIA cuDNN - prioritize system installation
+        cudnn_dir = program_files / "NVIDIA" / "CUDNN"
+        if cudnn_dir.exists():
+            logger.info(f"🔍 Found system cuDNN directory: {cudnn_dir}")
+            for cudnn_version_dir in cudnn_dir.iterdir():
+                if cudnn_version_dir.is_dir() and cudnn_version_dir.name.startswith('v'):
+                    bin_path = cudnn_version_dir / "bin"
+                    if bin_path.exists():
+                        cuda_paths.append(bin_path)
+                        logger.info(f"   ✅ Added system cuDNN version: {cudnn_version_dir.name}")
     
     # Also check common alternative locations
     alternative_paths = [
