@@ -1672,16 +1672,13 @@
                 console.log('🔍 GPU Info:', data);
 
                 if (data.success && data.gpu_available && !data.libs_installed) {
+                    // Libraries are missing - always clear dismissed flag and show modal
+                    localStorage.removeItem('gpuSetupDismissed');
+
                     if (autoShow) {
-                        // Check if user has already dismissed this prompt
-                        const dismissed = localStorage.getItem('gpuSetupDismissed');
-                        if (!dismissed) {
-                            setTimeout(() => {
-                                showGPUSetupModal();
-                            }, 1000);
-                        } else {
-                            console.log('⏭️ GPU setup was previously dismissed');
-                        }
+                        setTimeout(() => {
+                            showGPUSetupModal();
+                        }, 1000);
                     }
                     return { needsSetup: true, data };
                 } else if (!data.gpu_available) {
@@ -1689,6 +1686,8 @@
                     return { needsSetup: false, data };
                 } else if (data.libs_installed) {
                     console.log('✅ GPU libraries already installed');
+                    // Clear dismissed flag when libraries are installed
+                    localStorage.removeItem('gpuSetupDismissed');
                     return { needsSetup: false, data };
                 }
             } catch (error) {

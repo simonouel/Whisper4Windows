@@ -90,3 +90,4 @@ Future: faster-whisper, sounddevice, onnxruntime-directml, webrtcvad
 
 
 
+

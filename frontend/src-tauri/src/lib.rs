@@ -779,29 +779,29 @@ pub fn run() {
 
             log::info!("🚀 Whisper4Windows starting...");
 
-            // Start backend sidecar (disabled for development mode)
-            log::info!("🔧 Backend server should be running separately in development mode...");
-            // use tauri::Manager;
-            // use tauri_plugin_shell::ShellExt;
+            // Start backend sidecar
+            log::info!("🔧 Starting backend server...");
+            use tauri::Manager;
+            use tauri_plugin_shell::ShellExt;
 
-            // let sidecar_command = app.app_handle()
-            //     .shell()
-            //     .sidecar("whisper-backend")
-            //     .expect("Failed to create sidecar command");
+            let sidecar_command = app.app_handle()
+                .shell()
+                .sidecar("whisper-backend")
+                .expect("Failed to create sidecar command");
 
-            // let (_rx, child) = sidecar_command
-            //     .spawn()
-            //     .expect("Failed to spawn backend sidecar");
+            let (_rx, child) = sidecar_command
+                .spawn()
+                .expect("Failed to spawn backend sidecar");
 
             // Store the child process in state so we can kill it on app exit
-            // let state: tauri::State<AppState> = app.state();
-            // tauri::async_runtime::block_on(async {
-            //     *state.backend_child.lock().await = Some(child);
-            // });
+            let state: tauri::State<AppState> = app.state();
+            tauri::async_runtime::block_on(async {
+                *state.backend_child.lock().await = Some(child);
+            });
 
             // Wait a moment for backend to start
             std::thread::sleep(std::time::Duration::from_secs(1));
-            log::info!("✅ Assuming backend server is running separately");
+            log::info!("✅ Backend server started");
 
             // Create recording window
             WebviewWindowBuilder::new(app, "recording", tauri::WebviewUrl::App("recording.html".into()))
