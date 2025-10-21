@@ -31,6 +31,8 @@ whisper_engine: Optional[WhisperEngine] = None
 is_recording = False
 transcription_task: Optional[asyncio.Task] = None
 last_transcribed_text = ""
+is_model_loading = False
+model_loading_info = {"model": "", "status": ""}
 
 
 # Pydantic models
@@ -133,20 +135,60 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     global whisper_engine
-    
+
     backend = "cpu"
     model = "not_loaded"
-    
+
     if whisper_engine and whisper_engine.is_loaded:
         backend = whisper_engine.device
         model = whisper_engine.model_size
-    
+
     return HealthResponse(
         status="ok",
         backend=backend,
         model=model,
         recording=is_recording
     )
+
+
+@app.get("/model/status")
+async def get_model_status(model_size: str = "small"):
+    """Check if a model is downloaded and get loading status"""
+    global is_model_loading, model_loading_info, whisper_engine
+
+    try:
+        # Check if model is currently loading
+        if is_model_loading:
+            return {
+                "success": True,
+                "is_loading": True,
+                "loading_model": model_loading_info.get("model", ""),
+                "status": model_loading_info.get("status", "Downloading...")
+            }
+
+        # Check if this specific model is downloaded
+        temp_engine = WhisperEngine(model_size=model_size)
+        is_downloaded = temp_engine.is_model_downloaded(model_size)
+
+        # Check if model is currently loaded in memory
+        is_loaded = whisper_engine is not None and whisper_engine.model_size == model_size and whisper_engine.is_loaded
+
+        return {
+            "success": True,
+            "is_loading": False,
+            "is_downloaded": is_downloaded,
+            "is_loaded": is_loaded,
+            "model": model_size
+        }
+
+    except Exception as e:
+        logger.error(f"Error checking model status: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "is_loading": False,
+            "is_downloaded": False
+        }
 
 
 @app.post("/start")
@@ -241,13 +283,26 @@ async def stop_recording():
             }
         
         logger.info(f"📼 Captured {len(audio_data) / 16000:.1f} seconds of audio")
-        
+
         # Load model if not loaded
         if not whisper_engine.is_loaded:
+            global is_model_loading, model_loading_info
+
+            is_model_loading = True
+            model_loading_info = {
+                "model": whisper_engine.model_size,
+                "status": "Downloading model..." if not whisper_engine.is_model_downloaded() else "Loading model..."
+            }
+
             logger.info("📥 Loading Whisper model...")
-            success = whisper_engine.load_model()
-            if not success:
-                return {"status": "error", "message": "Failed to load Whisper model"}
+            try:
+                success = whisper_engine.load_model()
+                if not success:
+                    is_model_loading = False
+                    return {"status": "error", "message": "Failed to load Whisper model"}
+            finally:
+                is_model_loading = False
+                model_loading_info = {"model": "", "status": ""}
         
         # Transcribe ALL audio at once with timing
         import time

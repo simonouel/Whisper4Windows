@@ -857,7 +857,7 @@
                     <div class="config-row-right">
                         <div class="custom-dropdown" id="languageDropdown">
                             <div class="dropdown-header" onclick="toggleLanguageDropdown()">
-                                <span id="selectedLanguage">English</span>
+                                <span id="selectedLanguage">Auto-Detect</span>
                             </div>
                             <div class="dropdown-content" id="languageDropdownContent">
                                 <div class="dropdown-search">
@@ -1384,7 +1384,7 @@
             { code: 'su', name: 'Sundanese' }
         ];
 
-        let selectedLanguageCode = 'en';
+        let selectedLanguageCode = 'auto';
 
         function initializeLanguageDropdown() {
             const optionsContainer = document.getElementById('languageOptions');
@@ -1472,7 +1472,8 @@
             { value: 'base', name: 'Base' },
             { value: 'small', name: 'Small (Recommended)' },
             { value: 'medium', name: 'Medium' },
-            { value: 'large-v3', name: 'Large V3 (Best)' }
+            { value: 'large-v3', name: 'Large V3' },
+            { value: 'large-v3-turbo', name: 'Large V3 Turbo (Best)' }
         ];
 
         let selectedModelValue = 'small';

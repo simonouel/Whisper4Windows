@@ -39,7 +39,7 @@ impl Default for AppState {
             selected_device: Arc::new(Mutex::new("auto".to_string())),
             selected_microphone: Arc::new(Mutex::new(None)),  // Default: None (use default device)
             use_clipboard: Arc::new(Mutex::new(true)),  // Default: enabled
-            selected_language: Arc::new(Mutex::new("en".to_string())),  // Default: English
+            selected_language: Arc::new(Mutex::new("auto".to_string())),  // Default: Auto-detect
             toggle_shortcut: Arc::new(Mutex::new("F9".to_string())),  // Default: F9
             cancel_shortcut: Arc::new(Mutex::new("Escape".to_string())),  // Default: Escape
             backend_child: Arc::new(Mutex::new(None)),  // Will be set in setup
