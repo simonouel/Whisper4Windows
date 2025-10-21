@@ -58,44 +58,80 @@ def is_gpu_available() -> bool:
         return False
 
 
-def are_gpu_libs_installed() -> bool:
-    """Check if GPU libraries are already installed"""
+def check_library_status() -> Dict[str, any]:
+    """Check detailed status of each GPU library
+
+    Returns:
+        Dict with library names as keys and status info as values
+    """
     gpu_dir = get_gpu_libs_dir()
-
-    # Check for marker file that indicates successful installation
-    marker_file = gpu_dir / ".installed"
-    if not marker_file.exists():
-        return False
-
-    # Verify nvidia directory exists and has content
     nvidia_dir = gpu_dir / "nvidia"
-    if not nvidia_dir.exists():
-        logger.warning(f"Missing nvidia directory")
-        return False
 
-    # Check for BOTH cublas AND cudnn (both are required for GPU acceleration)
-    critical_dlls = {
-        "cublas": "nvidia/cublas/bin/cublas64*.dll",
-        "cudnn": "nvidia/cudnn/bin/cudnn_ops64*.dll",  # Most critical cuDNN DLL
+    # Map package names to their subdirectory and DLL patterns
+    library_checks = {
+        "nvidia-cublas-cu12": ("cublas", "cublas64*.dll"),
+        "nvidia-cudnn-cu12": ("cudnn", "cudnn64*.dll"),
+        "nvidia-cufft-cu12": ("cufft", "cufft64*.dll"),
+        "nvidia-curand-cu12": ("curand", "curand64*.dll"),
+        "nvidia-cusolver-cu12": ("cusolver", "cusolver64*.dll"),
+        "nvidia-cusparse-cu12": ("cusparse", "cusparse64*.dll"),
     }
 
-    missing_libs = []
-    found_dlls = {}
+    status = {}
+    for package_name, (subdir, dll_pattern) in library_checks.items():
+        # Check multiple possible locations for DLLs
+        lib_subdir = nvidia_dir / subdir
 
-    for lib_name, pattern in critical_dlls.items():
-        matching = list(gpu_dir.glob(pattern))
-        if matching:
-            found_dlls[lib_name] = str(matching[0])
-            logger.info(f"✅ Found {lib_name}: {matching[0].name}")
+        if not lib_subdir.exists():
+            logger.warning(f"❌ Missing {package_name} (checked pip and file system)")
+            status[package_name] = {"installed": False, "reason": "not_found"}
+            continue
+
+        # Look for DLLs in common locations: bin/, lib/, or root of subdir
+        dlls = []
+        search_paths = [
+            lib_subdir / "bin",
+            lib_subdir / "lib",
+            lib_subdir
+        ]
+
+        for search_path in search_paths:
+            if search_path.exists():
+                found_dlls = list(search_path.glob(dll_pattern))
+                if found_dlls:
+                    dlls.extend(found_dlls)
+                    break
+
+        # Also recursively search for DLLs as fallback
+        if not dlls:
+            dlls = list(lib_subdir.rglob(dll_pattern))
+
+        if dlls:
+            logger.info(f"✅ Found {package_name} DLLs: {', '.join(d.name for d in dlls)}")
+            status[package_name] = {
+                "installed": True,
+                "dlls": [d.name for d in dlls]
+            }
         else:
-            missing_libs.append(lib_name)
-            logger.warning(f"❌ Missing {lib_name}: no DLLs matching {pattern}")
+            logger.warning(f"❌ Missing {package_name} (directory exists but no DLLs matching {dll_pattern})")
+            status[package_name] = {"installed": False, "reason": "no_dlls"}
 
-    if missing_libs:
-        logger.warning(f"Missing critical CUDA libraries: {', '.join(missing_libs)}")
+    return status
+
+
+def are_gpu_libs_installed() -> bool:
+    """Check if GPU libraries are already installed"""
+    status = check_library_status()
+
+    # All libraries must be installed
+    all_installed = all(lib["installed"] for lib in status.values())
+
+    if not all_installed:
+        missing = [name for name, info in status.items() if not info["installed"]]
+        logger.warning(f"❌ Missing GPU libraries: {', '.join(missing)}")
         return False
 
-    logger.info(f"✅ All required GPU libraries present: {', '.join(found_dlls.keys())}")
+    logger.info(f"✅ All required GPU libraries present")
     return True
 
 
@@ -116,8 +152,18 @@ def install_gpu_libs(progress_callback=None) -> bool:
         True if successful, False otherwise
     """
     try:
-        logger.info("📦 Installing GPU libraries...")
+        logger.info("📦 Checking which GPU libraries need to be installed...")
         gpu_dir = get_gpu_libs_dir()
+
+        # Check which libraries are already installed
+        current_status = check_library_status()
+        packages_to_install = [pkg for pkg, status in current_status.items() if not status.get("installed", False)]
+
+        if not packages_to_install:
+            logger.info("✅ All GPU libraries already installed")
+            return True
+
+        logger.info(f"📦 Need to install {len(packages_to_install)} libraries: {', '.join(packages_to_install)}")
 
         if progress_callback:
             progress_callback(5, "Preparing installation...")
@@ -159,20 +205,27 @@ def install_gpu_libs(progress_callback=None) -> bool:
                 logger.error("❌ Could not find pip executable")
                 return False
 
-            packages = list(CUDA_PACKAGES.keys())
-            total_packages = len(packages)
+            total_packages = len(packages_to_install)
 
-            for idx, package in enumerate(packages):
+            # Install each package to its own temp directory to avoid overwrites
+            package_dirs = []
+
+            for idx, package in enumerate(packages_to_install):
                 if progress_callback:
-                    percent = 10 + (idx * 80 // total_packages)
+                    percent = 10 + (idx * 70 // total_packages)
                     progress_callback(percent, f"Downloading {package}...")
 
                 logger.info(f"Installing {package}...")
 
+                # Create a separate temp directory for this package
+                package_temp = temp_dir / f"pkg_{idx}_{package.replace('-', '_')}"
+                package_temp.mkdir(exist_ok=True)
+                package_dirs.append(package_temp)
+
                 # Download package using pip with timeout (10 min for large cuDNN download)
                 cmd = pip_cmd + [
                     "install",
-                    "--target", str(temp_dir),
+                    "--target", str(package_temp),
                     "--no-deps",
                     "--no-warn-script-location",
                     package
@@ -194,33 +247,73 @@ def install_gpu_libs(progress_callback=None) -> bool:
                     logger.error(f"  stderr: {result.stderr}")
                     return False
 
-                logger.info(f"✅ {package} installed successfully")
-                logger.debug(f"  stdout: {result.stdout[:200]}")
+                logger.info(f"✅ {package} installed successfully to {package_temp.name}")
 
             if progress_callback:
-                progress_callback(90, "Organizing libraries...")
+                progress_callback(85, "Organizing libraries...")
 
-            # Move nvidia folder from temp to gpu_libs
-            temp_nvidia = temp_dir / "nvidia"
+            # Merge all package nvidia directories into target
             target_nvidia = gpu_dir / "nvidia"
+            target_nvidia.mkdir(parents=True, exist_ok=True)
 
-            if temp_nvidia.exists():
-                if target_nvidia.exists():
-                    shutil.rmtree(target_nvidia)
-                shutil.move(str(temp_nvidia), str(target_nvidia))
-                logger.info(f"✅ Moved libraries to: {target_nvidia}")
-            else:
-                logger.error(f"❌ nvidia folder not found in temp: {temp_nvidia}")
-                return False
+            logger.info(f"📦 Merging libraries from {len(package_dirs)} packages to {target_nvidia}")
+
+            # Process each package directory
+            for pkg_dir in package_dirs:
+                pkg_nvidia = pkg_dir / "nvidia"
+
+                if not pkg_nvidia.exists():
+                    logger.warning(f"⚠️ No nvidia folder in {pkg_dir.name}, skipping")
+                    continue
+
+                # Log what we're about to merge
+                subdirs = [item.name for item in pkg_nvidia.iterdir() if item.is_dir()]
+                logger.info(f"   From {pkg_dir.name}: {', '.join(subdirs) if subdirs else 'no subdirectories'}")
+
+                # Collect all subdirectories from this package
+                for item in pkg_nvidia.iterdir():
+                    if not item.is_dir():
+                        continue
+
+                    src = item
+                    dst = target_nvidia / item.name
+
+                    try:
+                        if dst.exists():
+                            logger.info(f"      Replacing existing {item.name}")
+                            shutil.rmtree(dst)
+                        # Copy the directory (use copytree instead of move)
+                        shutil.copytree(str(src), str(dst))
+                        logger.info(f"   ✅ Copied: {item.name}")
+                    except Exception as e:
+                        logger.error(f"   ❌ Failed to copy {item.name}: {e}")
+                        return False
+
+            logger.info(f"✅ Merged all libraries to: {target_nvidia}")
+
+            # Log final library structure
+            logger.info(f"📋 Final library structure:")
+            for subdir in target_nvidia.iterdir():
+                if subdir.is_dir():
+                    bin_dir = subdir / "bin"
+                    if bin_dir.exists():
+                        dll_count = len(list(bin_dir.glob("*.dll")))
+                        logger.info(f"   {subdir.name}: {dll_count} DLLs")
+                    else:
+                        logger.info(f"   {subdir.name}: NO BIN DIRECTORY!")
 
             # Verify installation before marking as complete
             if progress_callback:
                 progress_callback(95, "Verifying installation...")
 
-            if not are_gpu_libs_installed():
-                logger.error("❌ Installation verification failed - missing required DLLs")
-                logger.error("   This usually means cuDNN download failed (630MB file)")
-                logger.error("   Try again with a stable internet connection")
+            # Re-check library status
+            final_status = check_library_status()
+            missing = [pkg for pkg, status in final_status.items() if not status.get("installed", False)]
+
+            if missing:
+                logger.error("❌ Installation verification failed - some libraries still missing")
+                logger.error(f"   Missing: {', '.join(missing)}")
+                logger.error("   Try running the installation again")
                 return False
 
             # Create marker file only after verification succeeds
@@ -260,9 +353,18 @@ def uninstall_gpu_libs() -> bool:
 
 def get_gpu_info() -> Dict:
     """Get information about GPU and library status"""
+    gpu_available = is_gpu_available()
+    library_status = check_library_status() if gpu_available else {}
+    all_installed = are_gpu_libs_installed() if gpu_available else False
+
+    # Get list of missing libraries
+    missing_libraries = [name for name, info in library_status.items() if not info.get("installed", False)]
+
     return {
-        "gpu_available": is_gpu_available(),
-        "libs_installed": are_gpu_libs_installed(),
+        "gpu_available": gpu_available,
+        "libs_installed": all_installed,
+        "library_status": library_status,
+        "missing_libraries": missing_libraries,
         "libs_dir": str(get_gpu_libs_dir()),
         "estimated_download_size_mb": get_download_size() // (1024 * 1024)
     }

@@ -69,9 +69,27 @@ async def lifespan(app: FastAPI):
     logger.info(f"API Docs: http://127.0.0.1:8000/docs")
     logger.info(f"Health Check: http://127.0.0.1:8000/health")
     logger.info("=" * 60)
-    
+
+    # Check GPU libraries at startup
+    logger.info("🔍 Checking GPU libraries...")
+    gpu_info = gpu_manager.get_gpu_info()
+
+    if gpu_info["gpu_available"]:
+        logger.info("✅ NVIDIA GPU detected")
+        if gpu_info["libs_installed"]:
+            logger.info("✅ GPU libraries installed - GPU acceleration available")
+        else:
+            logger.warning("⚠️ GPU detected but libraries not installed")
+            if gpu_info["missing_libraries"]:
+                logger.warning(f"   Missing: {', '.join(gpu_info['missing_libraries'])}")
+            logger.warning("   Use 'Install GPU Libraries' in settings to enable GPU acceleration")
+    else:
+        logger.info("ℹ️ No NVIDIA GPU detected - will use CPU mode")
+
+    logger.info("=" * 60)
+
     yield
-    
+
     # Cleanup on shutdown
     logger.info("Shutting down...")
     global audio_capture
