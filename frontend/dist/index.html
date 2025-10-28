@@ -1524,6 +1524,24 @@
             saveSettings();
         }
 
+        // Sync model from Rust (called when other window changes it)
+        window.syncModelFromRust = function(modelValue) {
+            console.log('🔄 Syncing model from Rust:', modelValue);
+            const model = MODELS.find(m => m.value === modelValue);
+            if (model) {
+                selectedModelValue = modelValue;
+                document.getElementById('selectedModel').textContent = model.name;
+
+                // Update selected state in dropdown
+                document.querySelectorAll('#modelOptions .dropdown-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                    if (opt.dataset.value === modelValue) {
+                        opt.classList.add('selected');
+                    }
+                });
+            }
+        };
+
         // Theme dropdown data
         const THEMES = [
             { value: 'system', name: 'System' },
@@ -1936,6 +1954,35 @@
                 document.getElementById('shortcut-toggle').textContent = toggleShortcut;
             } catch (error) {
                 console.error('❌ Error loading shortcuts:', error);
+            }
+
+            // Load saved model and device from Rust state
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                const [model, device] = await invoke('get_model_and_device');
+                console.log('📥 Loaded model from state:', model, 'device:', device);
+
+                // Update UI to match
+                const modelObj = MODELS.find(m => m.value === model);
+                if (modelObj) {
+                    selectedModelValue = model;
+                    document.getElementById('selectedModel').textContent = modelObj.name;
+                    initializeModelDropdown(); // Refresh to show selected
+                }
+
+                // Update device selection
+                selectedDevice = device;
+                const buttons = {
+                    'auto': document.getElementById('deviceAuto'),
+                    'cuda': document.getElementById('deviceGPU'),
+                    'cpu': document.getElementById('deviceCPU')
+                };
+                Object.values(buttons).forEach(btn => btn.classList.remove('active'));
+                if (buttons[device]) {
+                    buttons[device].classList.add('active');
+                }
+            } catch (error) {
+                console.error('❌ Error loading model/device from state:', error);
             }
 
             setTimeout(checkBackendHealth, 500);

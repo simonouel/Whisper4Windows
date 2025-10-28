@@ -404,12 +404,36 @@ async fn cmd_toggle_recording(app: AppHandle, state: State<'_, AppState>) -> Res
 async fn set_model_and_device(
     model: String,
     device: String,
-    state: State<'_, AppState>
+    state: State<'_, AppState>,
+    app: AppHandle
 ) -> Result<(), String> {
     *state.selected_model.lock().await = model.clone();
     *state.selected_device.lock().await = device.clone();
     log::info!("⚙️ Settings: model={}, device={}", model, device);
+
+    // Sync to both windows
+    if let Some(main_win) = app.get_webview_window("main") {
+        let _ = main_win.eval(&format!(
+            "if (typeof syncModelFromRust === 'function') {{ syncModelFromRust('{}'); }}",
+            model
+        ));
+    }
+    if let Some(recording_win) = app.get_webview_window("recording") {
+        let _ = recording_win.eval(&format!(
+            "if (typeof syncModelFromRust === 'function') {{ syncModelFromRust('{}'); }}",
+            model
+        ));
+    }
+
     Ok(())
+}
+
+// Get current model and device settings
+#[tauri::command]
+async fn get_model_and_device(state: State<'_, AppState>) -> Result<(String, String), String> {
+    let model = state.selected_model.lock().await.clone();
+    let device = state.selected_device.lock().await.clone();
+    Ok((model, device))
 }
 
 // Set microphone device
@@ -935,6 +959,7 @@ pub fn run() {
             cmd_cancel_recording,
             cmd_toggle_recording,
             set_model_and_device,
+            get_model_and_device,
             set_microphone_device,
             get_microphone_device,
             set_clipboard_paste,

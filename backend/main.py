@@ -33,6 +33,7 @@ transcription_task: Optional[asyncio.Task] = None
 last_transcribed_text = ""
 is_model_loading = False
 model_loading_info = {"model": "", "status": ""}
+current_language: Optional[str] = "en"  # Store language from start request
 
 
 # Pydantic models
@@ -194,14 +195,17 @@ async def get_model_status(model_size: str = "small"):
 @app.post("/start")
 async def start_recording(request: StartRequest):
     """Start recording audio (no transcription until stop)"""
-    global audio_capture, whisper_engine, is_recording
-    
+    global audio_capture, whisper_engine, is_recording, current_language
+
     try:
         if is_recording:
             return {"status": "error", "message": "Already recording"}
-        
+
+        # Store language for use in /stop
+        current_language = request.language
         logger.info(f"🎙️ Starting recording (will transcribe on STOP)")
         logger.info(f"📋 Requested device: {request.device}")
+        logger.info(f"🌐 Language: {current_language or 'auto-detect'}")
 
         # Reuse existing engine if model/device match, otherwise create new one
         if whisper_engine is not None and \
@@ -313,7 +317,7 @@ async def stop_recording():
             None,
             whisper_engine.transcribe_audio,
             audio_data,
-            "en"
+            current_language  # Use stored language from /start request
         )
         
         transcription_time = time.time() - transcription_start

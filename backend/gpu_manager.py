@@ -68,13 +68,14 @@ def check_library_status() -> Dict[str, any]:
     nvidia_dir = gpu_dir / "nvidia"
 
     # Map package names to their subdirectory and DLL patterns
+    # Using broader patterns to catch all DLL variants (e.g., cudnn_ops64_9.dll, cudnn64_9.dll)
     library_checks = {
-        "nvidia-cublas-cu12": ("cublas", "cublas64*.dll"),
-        "nvidia-cudnn-cu12": ("cudnn", "cudnn64*.dll"),
-        "nvidia-cufft-cu12": ("cufft", "cufft64*.dll"),
-        "nvidia-curand-cu12": ("curand", "curand64*.dll"),
-        "nvidia-cusolver-cu12": ("cusolver", "cusolver64*.dll"),
-        "nvidia-cusparse-cu12": ("cusparse", "cusparse64*.dll"),
+        "nvidia-cublas-cu12": ("cublas", "cublas*.dll"),
+        "nvidia-cudnn-cu12": ("cudnn", "cudnn*.dll"),
+        "nvidia-cufft-cu12": ("cufft", "cufft*.dll"),
+        "nvidia-curand-cu12": ("curand", "curand*.dll"),
+        "nvidia-cusolver-cu12": ("cusolver", "cusolver*.dll"),
+        "nvidia-cusparse-cu12": ("cusparse", "cusparse*.dll"),
     }
 
     status = {}

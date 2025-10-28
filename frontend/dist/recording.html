@@ -612,6 +612,31 @@
             console.log('✅ Window hidden');
         }
 
+        // Sync model from Rust (called when other window changes it)
+        window.syncModelFromRust = function(modelValue) {
+            console.log('🔄 Syncing model from Rust:', modelValue);
+            const select = document.getElementById('modelSelect');
+            if (select) {
+                select.value = modelValue;
+            }
+        };
+
+        // Load current model from state
+        async function loadModelFromState() {
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                const [model, device] = await invoke('get_model_and_device');
+                console.log('📥 Loaded model from state:', model);
+
+                const select = document.getElementById('modelSelect');
+                if (select) {
+                    select.value = model;
+                }
+            } catch (error) {
+                console.error('❌ Error loading model from state:', error);
+            }
+        }
+
         // Model selection handler
         document.getElementById('modelSelect').addEventListener('change', async (e) => {
             const model = e.target.value;
@@ -716,6 +741,7 @@
 
         // Initialize on load
         initVisualizer();
+        loadModelFromState(); // Load the current model setting
         console.log('✅ Recording window loaded');
         console.log('✅ Visualizer initialized with', bars.length, 'bars');
         console.log('🎨 TEMPORARY: Using hardcoded audio visualizer');
@@ -741,6 +767,8 @@
                     console.log('🌟 First show detected');
                     isFirstShow = false;
                 }
+                // Load current model setting and reset to recording state
+                loadModelFromState();
                 // Small delay to ensure window is fully shown
                 setTimeout(() => {
                 resetToRecording();
