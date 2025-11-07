@@ -15,6 +15,7 @@ import shutil
 logger = logging.getLogger(__name__)
 
 # CUDA library download URLs (using nvidia-pyindex packages)
+# Added CUDA runtime packages for full GPU support (fixes CUDNN_STATUS_EXECUTION_FAILED on GTX 1060)
 CUDA_PACKAGES = {
     "nvidia-cublas-cu12": "https://pypi.org/pypi/nvidia-cublas-cu12/json",
     "nvidia-cudnn-cu12": "https://pypi.org/pypi/nvidia-cudnn-cu12/json",
@@ -22,6 +23,8 @@ CUDA_PACKAGES = {
     "nvidia-curand-cu12": "https://pypi.org/pypi/nvidia-curand-cu12/json",
     "nvidia-cusolver-cu12": "https://pypi.org/pypi/nvidia-cusolver-cu12/json",
     "nvidia-cusparse-cu12": "https://pypi.org/pypi/nvidia-cusparse-cu12/json",
+    "nvidia-cuda-runtime-cu12": "https://pypi.org/pypi/nvidia-cuda-runtime-cu12/json",
+    "nvidia-cuda-nvrtc-cu12": "https://pypi.org/pypi/nvidia-cuda-nvrtc-cu12/json",
 }
 
 
@@ -76,6 +79,8 @@ def check_library_status() -> Dict[str, any]:
         "nvidia-curand-cu12": ("curand", "curand*.dll"),
         "nvidia-cusolver-cu12": ("cusolver", "cusolver*.dll"),
         "nvidia-cusparse-cu12": ("cusparse", "cusparse*.dll"),
+        "nvidia-cuda-runtime-cu12": ("cuda_runtime", "cudart*.dll"),
+        "nvidia-cuda-nvrtc-cu12": ("cuda_nvrtc", "nvrtc*.dll"),
     }
 
     status = {}
@@ -138,8 +143,8 @@ def are_gpu_libs_installed() -> bool:
 
 def get_download_size() -> int:
     """Get estimated download size in bytes (approximate)"""
-    # Approximate sizes for CUDA libraries
-    return 600 * 1024 * 1024  # ~600MB
+    # Approximate sizes for CUDA libraries (8 packages total)
+    return 700 * 1024 * 1024  # ~700MB
 
 
 def install_gpu_libs(progress_callback=None) -> bool:

@@ -40,6 +40,8 @@ def setup_cuda_paths():
             Path(sys._MEIPASS) / "nvidia" / "curand" / "bin",
             Path(sys._MEIPASS) / "nvidia" / "cusolver" / "bin",
             Path(sys._MEIPASS) / "nvidia" / "cusparse" / "bin",
+            Path(sys._MEIPASS) / "nvidia" / "cuda_runtime" / "bin",
+            Path(sys._MEIPASS) / "nvidia" / "cuda_nvrtc" / "bin",
         ])
 
     # Add downloaded GPU libraries from AppData (for optional GPU install)
@@ -54,6 +56,8 @@ def setup_cuda_paths():
             gpu_libs_dir / "nvidia" / "curand" / "bin",
             gpu_libs_dir / "nvidia" / "cusolver" / "bin",
             gpu_libs_dir / "nvidia" / "cusparse" / "bin",
+            gpu_libs_dir / "nvidia" / "cuda_runtime" / "bin",
+            gpu_libs_dir / "nvidia" / "cuda_nvrtc" / "bin",
         ])
 
     # System CUDA installation (dynamic detection for any device)
