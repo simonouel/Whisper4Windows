@@ -518,12 +518,31 @@
             font-size: 13px;
             color: #155724;
             font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .status-indicator:hover {
+            transform: scale(1.02);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .status-indicator.offline {
             background: #f8d7da;
             border-color: #f5c6cb;
             color: #721c24;
+        }
+
+        .status-indicator.starting {
+            background: #fff3cd;
+            border-color: #ffeaa7;
+            color: #856404;
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-indicator.checking {
+            background: #e3f2fd;
+            border-color: #bbdefb;
+            color: #1565c0;
         }
 
         /* Coming Soon Badge */
@@ -788,10 +807,10 @@
                 <div class="config-row">
                     <div class="config-row-left">
                         <div class="config-row-title">Backend Status</div>
-                        <div class="config-row-description">Connection to transcription engine</div>
+                        <div class="config-row-description">Connection to transcription engine (click to restart if offline)</div>
                     </div>
                     <div class="config-row-right">
-                        <div class="status-indicator" id="backendStatus">
+                        <div class="status-indicator" id="backendStatus" onclick="handleBackendStatusClick()" style="cursor: pointer;">
                             <span>⏳</span>
                             <span>Checking...</span>
                         </div>
@@ -1177,22 +1196,82 @@
         });
 
         // Backend Health Check
+        let backendStatusInterval = null;
+        let lastBackendStatus = null;
+
         async function checkBackendHealth() {
             try {
                 const response = await fetch(`${BACKEND_URL}/health`, {
                     method: 'GET',
                     mode: 'cors',
-                    headers: { 'Accept': 'application/json' }
+                    headers: { 'Accept': 'application/json' },
+                    signal: AbortSignal.timeout(3000) // 3 second timeout
                 });
                 const data = await response.json();
 
                 const statusEl = document.getElementById('backendStatus');
                 statusEl.innerHTML = `<span>✅</span><span>${data.backend.toUpperCase()} Ready (${data.model})</span>`;
-                statusEl.classList.remove('offline');
+                statusEl.classList.remove('offline', 'starting', 'checking');
+                lastBackendStatus = 'online';
             } catch (error) {
                 const statusEl = document.getElementById('backendStatus');
-                statusEl.innerHTML = `<span>❌</span><span>Backend Offline</span>`;
+                if (lastBackendStatus !== 'offline') {
+                    console.log('⚠️ Backend offline:', error.message);
+                }
+                statusEl.innerHTML = `<span>❌</span><span>Backend Offline (click to restart)</span>`;
+                statusEl.classList.remove('starting', 'checking');
                 statusEl.classList.add('offline');
+                lastBackendStatus = 'offline';
+            }
+        }
+
+        // Handle backend status click - restart if offline
+        async function handleBackendStatusClick() {
+            if (lastBackendStatus === 'offline') {
+                try {
+                    const statusEl = document.getElementById('backendStatus');
+                    statusEl.innerHTML = `<span>⏳</span><span>Starting backend...</span>`;
+                    statusEl.classList.remove('offline');
+                    statusEl.classList.add('starting');
+
+                    console.log('🔄 Attempting to restart backend...');
+
+                    // Call Tauri to restart the backend
+                    const { invoke } = window.__TAURI_INTERNALS__;
+                    await invoke('restart_backend');
+
+                    // Wait a moment for backend to start
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+
+                    // Check if it's online now
+                    await checkBackendHealth();
+                } catch (error) {
+                    console.error('❌ Failed to restart backend:', error);
+                    const statusEl = document.getElementById('backendStatus');
+                    statusEl.innerHTML = `<span>❌</span><span>Failed to restart - try relaunching app</span>`;
+                    statusEl.classList.remove('starting');
+                    statusEl.classList.add('offline');
+                }
+            }
+        }
+
+        // Start periodic backend health checks
+        function startBackendHealthPolling() {
+            // Check immediately
+            checkBackendHealth();
+
+            // Then check every 5 seconds
+            if (backendStatusInterval) {
+                clearInterval(backendStatusInterval);
+            }
+            backendStatusInterval = setInterval(checkBackendHealth, 5000);
+        }
+
+        // Stop polling (for cleanup)
+        function stopBackendHealthPolling() {
+            if (backendStatusInterval) {
+                clearInterval(backendStatusInterval);
+                backendStatusInterval = null;
             }
         }
 
@@ -1985,7 +2064,8 @@
                 console.error('❌ Error loading model/device from state:', error);
             }
 
-            setTimeout(checkBackendHealth, 500);
+            // Start real-time backend health polling
+            setTimeout(startBackendHealthPolling, 500);
             setTimeout(saveSettings, 1000);
         });
 

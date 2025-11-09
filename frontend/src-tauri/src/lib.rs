@@ -709,6 +709,49 @@ async fn check_for_updates() -> Result<String, String> {
     Ok("No updates available".to_string())  // TODO: Implement GitHub release check
 }
 
+// Restart backend command
+#[tauri::command]
+async fn restart_backend(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    log::info!("🔄 Restarting backend...");
+
+    // Kill existing backend if running
+    if let Some(child) = state.backend_child.lock().await.take() {
+        log::info!("🛑 Killing existing backend process...");
+        match child.kill() {
+            Ok(_) => {
+                log::info!("✅ Backend process killed");
+                // Give it a moment to fully terminate
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            }
+            Err(e) => {
+                log::warn!("⚠️ Failed to kill backend: {}", e);
+            }
+        }
+    }
+
+    // Start new backend
+    log::info!("🚀 Starting new backend process...");
+    use tauri::Manager;
+    use tauri_plugin_shell::ShellExt;
+
+    let sidecar_command = app.shell()
+        .sidecar("whisper-backend")
+        .map_err(|e| format!("Failed to create sidecar command: {}", e))?;
+
+    let (_rx, child) = sidecar_command
+        .spawn()
+        .map_err(|e| format!("Failed to spawn backend sidecar: {}", e))?;
+
+    // Store the new child process
+    *state.backend_child.lock().await = Some(child);
+
+    // Wait for backend to start
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    log::info!("✅ Backend restarted successfully");
+
+    Ok(())
+}
+
 // Tray menu
 fn create_tray_menu(app: &AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error> {
     let toggle = MenuItem::with_id(app, "toggle", "🎙️ Start/Stop Recording (F9)", true, None::<&str>)?;
@@ -973,7 +1016,8 @@ pub fn run() {
             set_preferred_languages,
             get_launch_on_login,
             set_launch_on_login,
-            check_for_updates
+            check_for_updates,
+            restart_backend
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

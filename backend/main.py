@@ -33,13 +33,13 @@ transcription_task: Optional[asyncio.Task] = None
 last_transcribed_text = ""
 is_model_loading = False
 model_loading_info = {"model": "", "status": ""}
-current_language: Optional[str] = "en"  # Store language from start request
+current_language: Optional[str] = None  # Store language from start request
 
 
 # Pydantic models
 class StartRequest(BaseModel):
     model_size: str = "small"  # tiny, base, small, medium, large-v3
-    language: Optional[str] = "en"
+    language: Optional[str] = None  # Language code or None for auto-detect
     device: str = "auto"  # auto, cpu, cuda
     device_index: Optional[int] = None  # Microphone device index (None = default)
 
@@ -202,7 +202,8 @@ async def start_recording(request: StartRequest):
             return {"status": "error", "message": "Already recording"}
 
         # Store language for use in /stop
-        current_language = request.language
+        # Convert "auto" string to None for Whisper's auto-detection
+        current_language = None if request.language in (None, "auto") else request.language
         logger.info(f"🎙️ Starting recording (will transcribe on STOP)")
         logger.info(f"📋 Requested device: {request.device}")
         logger.info(f"🌐 Language: {current_language or 'auto-detect'}")
@@ -311,13 +312,28 @@ async def stop_recording():
         # Transcribe ALL audio at once with timing
         import time
         logger.info("🎙️ Transcribing full recording...")
+        logger.info(f"   Language setting: {current_language if current_language else 'auto-detect'}")
+
+        # Determine task and language for Whisper:
+        # - If English selected: translate any language TO English (language=None, task="translate")
+        # - Otherwise: transcribe in specified/detected language (language=current_language, task="transcribe")
+        if current_language == "en":
+            task = "translate"
+            whisper_language = None  # Auto-detect source language, translate to English
+            logger.info(f"   Task: translate to English (auto-detect source)")
+        else:
+            task = "transcribe"
+            whisper_language = current_language  # None for auto-detect, or specific language code
+            logger.info(f"   Task: transcribe in {whisper_language if whisper_language else 'detected language'}")
+
         transcription_start = time.time()
-        
+
         result = await loop.run_in_executor(
             None,
             whisper_engine.transcribe_audio,
             audio_data,
-            current_language  # Use stored language from /start request
+            whisper_language,  # None for auto-detect, language code for specific language, or None when translating
+            task  # "translate" for English, "transcribe" for all others
         )
         
         transcription_time = time.time() - transcription_start
