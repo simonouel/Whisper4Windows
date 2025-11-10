@@ -192,6 +192,84 @@ async def get_model_status(model_size: str = "small"):
         }
 
 
+@app.post("/load_model")
+async def load_model(request: StartRequest):
+    """Pre-load a Whisper model without starting recording"""
+    global whisper_engine, is_model_loading, model_loading_info, current_language
+
+    try:
+        logger.info(f"📥 Loading model: {request.model_size} on {request.device}")
+
+        # Store language
+        current_language = None if request.language in (None, "auto") else request.language
+
+        # Check if we can reuse existing engine
+        if whisper_engine is not None and \
+           whisper_engine.model_size == request.model_size and \
+           whisper_engine._original_device == request.device and \
+           whisper_engine.is_loaded:
+            logger.info(f"♻️ Model already loaded: {request.model_size} on {whisper_engine.device}")
+            return {
+                "status": "success",
+                "message": "Model already loaded",
+                "model": request.model_size,
+                "device": whisper_engine.device
+            }
+
+        # Create new engine if needed
+        if whisper_engine is None or \
+           whisper_engine.model_size != request.model_size or \
+           whisper_engine._original_device != request.device:
+            whisper_engine = WhisperEngine(
+                model_size=request.model_size,
+                device=request.device
+            )
+            logger.info(f"✓ Whisper engine created (device: {whisper_engine.device})")
+
+        # Load the model if not already loaded
+        if not whisper_engine.is_loaded:
+            is_model_loading = True
+            model_loading_info = {
+                "model": whisper_engine.model_size,
+                "status": "Downloading model..." if not whisper_engine.is_model_downloaded() else "Loading model..."
+            }
+
+            logger.info("📥 Loading Whisper model into memory...")
+            loop = asyncio.get_event_loop()
+            success = await loop.run_in_executor(None, whisper_engine.load_model)
+
+            is_model_loading = False
+            model_loading_info = {"model": "", "status": ""}
+
+            if not success:
+                return {
+                    "status": "error",
+                    "message": "Failed to load Whisper model"
+                }
+
+            logger.info(f"✅ Model loaded: {request.model_size} on {whisper_engine.device}")
+
+        return {
+            "status": "success",
+            "message": "Model loaded successfully",
+            "model": request.model_size,
+            "device": whisper_engine.device
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Failed to load model: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+
+        is_model_loading = False
+        model_loading_info = {"model": "", "status": ""}
+
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
 @app.post("/start")
 async def start_recording(request: StartRequest):
     """Start recording audio (no transcription until stop)"""

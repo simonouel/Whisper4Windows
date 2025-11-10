@@ -13,11 +13,40 @@ use windows::Win32::{
         OpenClipboard, CloseClipboard, EmptyClipboard, SetClipboardData, GetClipboardData,
     },
     System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GlobalSize, GMEM_MOVEABLE},
+    System::Registry::{RegOpenKeyExW, RegSetValueExW, RegDeleteValueW, RegQueryValueExW, RegCloseKey, HKEY_CURRENT_USER, KEY_READ, KEY_WRITE, REG_SZ},
     Foundation::{HWND, HANDLE, HGLOBAL},
 };
 use tokio::sync::Mutex;
 use anyhow::Result;
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, GlobalShortcutExt};
+use std::path::PathBuf;
+use std::fs;
+
+// Persistent settings structure
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Settings {
+    pub selected_model: String,
+    pub selected_device: String,
+    pub selected_microphone: Option<i32>,
+    pub use_clipboard: bool,
+    pub selected_language: String,
+    pub toggle_shortcut: String,
+    pub cancel_shortcut: String,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            selected_model: "small".to_string(),
+            selected_device: "auto".to_string(),
+            selected_microphone: None,
+            use_clipboard: true,
+            selected_language: "auto".to_string(),
+            toggle_shortcut: "F9".to_string(),
+            cancel_shortcut: "Escape".to_string(),
+        }
+    }
+}
 
 // Simple state - track model, device, and clipboard setting
 #[derive(Debug, Clone)]
@@ -30,20 +59,73 @@ pub struct AppState {
     pub toggle_shortcut: Arc<Mutex<String>>,  // Toggle recording shortcut
     pub cancel_shortcut: Arc<Mutex<String>>,  // Cancel recording shortcut
     pub backend_child: Arc<Mutex<Option<tauri_plugin_shell::process::CommandChild>>>,  // Backend process handle
+    pub settings_path: PathBuf,  // Path to settings file
 }
 
-impl Default for AppState {
-    fn default() -> Self {
+impl AppState {
+    fn new(settings_path: PathBuf) -> Self {
         Self {
             selected_model: Arc::new(Mutex::new("small".to_string())),
             selected_device: Arc::new(Mutex::new("auto".to_string())),
-            selected_microphone: Arc::new(Mutex::new(None)),  // Default: None (use default device)
-            use_clipboard: Arc::new(Mutex::new(true)),  // Default: enabled
-            selected_language: Arc::new(Mutex::new("auto".to_string())),  // Default: Auto-detect
-            toggle_shortcut: Arc::new(Mutex::new("F9".to_string())),  // Default: F9
-            cancel_shortcut: Arc::new(Mutex::new("Escape".to_string())),  // Default: Escape
-            backend_child: Arc::new(Mutex::new(None)),  // Will be set in setup
+            selected_microphone: Arc::new(Mutex::new(None)),
+            use_clipboard: Arc::new(Mutex::new(true)),
+            selected_language: Arc::new(Mutex::new("auto".to_string())),
+            toggle_shortcut: Arc::new(Mutex::new("F9".to_string())),
+            cancel_shortcut: Arc::new(Mutex::new("Escape".to_string())),
+            backend_child: Arc::new(Mutex::new(None)),
+            settings_path,
         }
+    }
+
+    async fn load_settings(&self) -> Settings {
+        match fs::read_to_string(&self.settings_path) {
+            Ok(content) => {
+                match serde_json::from_str::<Settings>(&content) {
+                    Ok(settings) => {
+                        log::info!("✅ Loaded settings from {:?}", self.settings_path);
+                        settings
+                    }
+                    Err(e) => {
+                        log::warn!("⚠️ Failed to parse settings: {}, using defaults", e);
+                        Settings::default()
+                    }
+                }
+            }
+            Err(_) => {
+                log::info!("📝 No settings file found, using defaults");
+                Settings::default()
+            }
+        }
+    }
+
+    async fn save_settings(&self) {
+        let settings = Settings {
+            selected_model: self.selected_model.lock().await.clone(),
+            selected_device: self.selected_device.lock().await.clone(),
+            selected_microphone: *self.selected_microphone.lock().await,
+            use_clipboard: *self.use_clipboard.lock().await,
+            selected_language: self.selected_language.lock().await.clone(),
+            toggle_shortcut: self.toggle_shortcut.lock().await.clone(),
+            cancel_shortcut: self.cancel_shortcut.lock().await.clone(),
+        };
+
+        if let Ok(json) = serde_json::to_string_pretty(&settings) {
+            if let Err(e) = fs::write(&self.settings_path, json) {
+                log::error!("❌ Failed to save settings: {}", e);
+            } else {
+                log::info!("💾 Settings saved to {:?}", self.settings_path);
+            }
+        }
+    }
+
+    async fn apply_settings(&self, settings: Settings) {
+        *self.selected_model.lock().await = settings.selected_model;
+        *self.selected_device.lock().await = settings.selected_device;
+        *self.selected_microphone.lock().await = settings.selected_microphone;
+        *self.use_clipboard.lock().await = settings.use_clipboard;
+        *self.selected_language.lock().await = settings.selected_language;
+        *self.toggle_shortcut.lock().await = settings.toggle_shortcut;
+        *self.cancel_shortcut.lock().await = settings.cancel_shortcut;
     }
 }
 
@@ -411,6 +493,43 @@ async fn set_model_and_device(
     *state.selected_device.lock().await = device.clone();
     log::info!("⚙️ Settings: model={}, device={}", model, device);
 
+    // Save settings to disk
+    state.save_settings().await;
+
+    // Notify backend to load the model immediately
+    let model_clone = model.clone();
+    let device_clone = device.clone();
+    let language = state.selected_language.lock().await.clone();
+
+    tokio::spawn(async move {
+        let client = reqwest::Client::new();
+        let lang_value = if language == "auto" {
+            serde_json::Value::Null
+        } else {
+            serde_json::json!(language)
+        };
+
+        match client.post("http://127.0.0.1:8000/load_model")
+            .json(&serde_json::json!({
+                "model_size": model_clone,
+                "device": device_clone,
+                "language": lang_value
+            }))
+            .send()
+            .await
+        {
+            Ok(resp) if resp.status().is_success() => {
+                log::info!("✅ Backend loaded model: {} on {}", model_clone, device_clone);
+            }
+            Ok(resp) => {
+                log::warn!("⚠️ Backend /load_model returned: {}", resp.status());
+            }
+            Err(e) => {
+                log::warn!("⚠️ Failed to notify backend to load model: {}", e);
+            }
+        }
+    });
+
     // Sync to both windows
     if let Some(main_win) = app.get_webview_window("main") {
         let _ = main_win.eval(&format!(
@@ -444,6 +563,7 @@ async fn set_microphone_device(
 ) -> Result<(), String> {
     *state.selected_microphone.lock().await = device_index;
     log::info!("🎤 Microphone device set to: {:?}", device_index);
+    state.save_settings().await;
     Ok(())
 }
 
@@ -461,6 +581,7 @@ async fn set_clipboard_paste(
 ) -> Result<(), String> {
     *state.use_clipboard.lock().await = enabled;
     log::info!("⚙️ Clipboard paste setting: {}", enabled);
+    state.save_settings().await;
     Ok(())
 }
 
@@ -476,6 +597,7 @@ async fn get_clipboard_paste(state: State<'_, AppState>) -> Result<bool, String>
 async fn set_language(language: String, state: State<'_, AppState>) -> Result<(), String> {
     *state.selected_language.lock().await = language.clone();
     log::info!("🌐 Language set to: {}", language);
+    state.save_settings().await;
     Ok(())
 }
 
@@ -610,11 +732,14 @@ async fn save_shortcuts(
     app: AppHandle,
     state: State<'_, AppState>
 ) -> Result<(), String> {
+    let mut settings_changed = false;
+
     // Handle toggle shortcut
     if let Some(toggle) = shortcuts.get("toggle") {
         let old_shortcut = state.toggle_shortcut.lock().await.clone();
         *state.toggle_shortcut.lock().await = toggle.clone();
         log::info!("⌨️ Toggle shortcut saved: {} (was: {})", toggle, old_shortcut);
+        settings_changed = true;
 
         // Re-register the shortcut
         // First, unregister old shortcut
@@ -645,6 +770,7 @@ async fn save_shortcuts(
         let old_shortcut = state.cancel_shortcut.lock().await.clone();
         *state.cancel_shortcut.lock().await = cancel.clone();
         log::info!("⌨️ Cancel shortcut saved: {} (was: {})", cancel, old_shortcut);
+        settings_changed = true;
 
         // Re-register the shortcut
         // First, unregister old shortcut
@@ -668,6 +794,11 @@ async fn save_shortcuts(
             log::error!("❌ Failed to parse cancel shortcut: {}", cancel);
             return Err(format!("Invalid cancel shortcut format: {}", cancel));
         }
+    }
+
+    // Save settings if changed
+    if settings_changed {
+        state.save_settings().await;
     }
 
     Ok(())
@@ -695,13 +826,121 @@ async fn set_preferred_languages(_languages: Vec<String>) -> Result<(), String> 
 }
 
 #[tauri::command]
-async fn get_launch_on_login() -> Result<bool, String> {
-    Ok(false)  // TODO: Implement later
+async fn get_launch_on_startup() -> Result<bool, String> {
+    use windows::core::PCWSTR;
+
+    unsafe {
+        const REG_PATH: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+        const APP_NAME: &str = "Whisper4Windows";
+
+        // Convert registry path to wide string
+        let reg_path_wide: Vec<u16> = REG_PATH.encode_utf16().chain(std::iter::once(0)).collect();
+
+        // Open registry key
+        let mut hkey = std::mem::zeroed();
+        let result = RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            PCWSTR::from_raw(reg_path_wide.as_ptr()),
+            0,
+            KEY_READ,
+            &mut hkey,
+        );
+
+        if result.is_err() {
+            log::info!("🔍 Launch on startup: Not set (registry key not accessible)");
+            return Ok(false);
+        }
+
+        // Query for our app name
+        let app_name_wide: Vec<u16> = APP_NAME.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut data_size: u32 = 0;
+
+        let query_result = RegQueryValueExW(
+            hkey,
+            PCWSTR::from_raw(app_name_wide.as_ptr()),
+            None,
+            None,
+            None,
+            Some(&mut data_size),
+        );
+
+        let _ = RegCloseKey(hkey);
+
+        let exists = query_result.is_ok() && data_size > 0;
+        log::info!("🔍 Launch on startup: {}", if exists { "Enabled" } else { "Disabled" });
+        Ok(exists)
+    }
 }
 
 #[tauri::command]
-async fn set_launch_on_login(_enabled: bool) -> Result<(), String> {
-    Ok(())  // TODO: Implement later
+async fn set_launch_on_startup(enabled: bool) -> Result<(), String> {
+    use windows::core::PCWSTR;
+
+    unsafe {
+        const REG_PATH: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+        const APP_NAME: &str = "Whisper4Windows";
+
+        // Convert registry path to wide string
+        let reg_path_wide: Vec<u16> = REG_PATH.encode_utf16().chain(std::iter::once(0)).collect();
+
+        // Open registry key with write access
+        let mut hkey = std::mem::zeroed();
+        let result = RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            PCWSTR::from_raw(reg_path_wide.as_ptr()),
+            0,
+            KEY_WRITE,
+            &mut hkey,
+        );
+
+        if result.is_err() {
+            return Err("Failed to open registry key".to_string());
+        }
+
+        let app_name_wide: Vec<u16> = APP_NAME.encode_utf16().chain(std::iter::once(0)).collect();
+
+        if enabled {
+            // Get current executable path
+            let exe_path = std::env::current_exe()
+                .map_err(|e| format!("Failed to get executable path: {}", e))?;
+
+            let exe_path_str = format!("\"{}\"", exe_path.display());
+            let exe_path_wide: Vec<u16> = exe_path_str.encode_utf16().chain(std::iter::once(0)).collect();
+
+            // Set registry value
+            let set_result = RegSetValueExW(
+                hkey,
+                PCWSTR::from_raw(app_name_wide.as_ptr()),
+                0,
+                REG_SZ,
+                Some(&std::slice::from_raw_parts(
+                    exe_path_wide.as_ptr() as *const u8,
+                    exe_path_wide.len() * 2,
+                )),
+            );
+
+            let _ = RegCloseKey(hkey);
+
+            if set_result.is_ok() {
+                log::info!("✅ Launch on startup: Enabled ({})", exe_path_str);
+                Ok(())
+            } else {
+                Err(format!("Failed to set registry value: {:?}", set_result))
+            }
+        } else {
+            // Delete registry value (ignore error if value doesn't exist)
+            let delete_result = RegDeleteValueW(
+                hkey,
+                PCWSTR::from_raw(app_name_wide.as_ptr()),
+            );
+
+            let _ = RegCloseKey(hkey);
+
+            // Success if deletion worked or if value didn't exist
+            log::info!("✅ Launch on startup: Disabled");
+            Ok(())
+        }
+    }
 }
 
 #[tauri::command]
@@ -731,7 +970,6 @@ async fn restart_backend(app: AppHandle, state: State<'_, AppState>) -> Result<(
 
     // Start new backend
     log::info!("🚀 Starting new backend process...");
-    use tauri::Manager;
     use tauri_plugin_shell::ShellExt;
 
     let sidecar_command = app.shell()
@@ -846,9 +1084,38 @@ pub fn run() {
 
             log::info!("🚀 Whisper4Windows starting...");
 
+            // Initialize app state with settings path
+            let app_data_dir = app.path().app_data_dir()
+                .expect("Failed to get app data directory");
+
+            // Create app data directory if it doesn't exist
+            if !app_data_dir.exists() {
+                fs::create_dir_all(&app_data_dir)
+                    .expect("Failed to create app data directory");
+            }
+
+            let settings_path = app_data_dir.join("settings.json");
+            log::info!("📁 Settings path: {:?}", settings_path);
+
+            let app_state = AppState::new(settings_path);
+
+            // Load and apply saved settings
+            let settings = tauri::async_runtime::block_on(async {
+                app_state.load_settings().await
+            });
+
+            tauri::async_runtime::block_on(async {
+                app_state.apply_settings(settings.clone()).await;
+            });
+
+            log::info!("📋 Loaded settings: model={}, device={}, language={}",
+                settings.selected_model, settings.selected_device, settings.selected_language);
+
+            // Store state in app
+            app.manage(app_state);
+
             // Start backend sidecar
             log::info!("🔧 Starting backend server...");
-            use tauri::Manager;
             use tauri_plugin_shell::ShellExt;
 
             let sidecar_command = app.app_handle()
@@ -991,10 +1258,48 @@ pub fn run() {
                 log::error!("❌ Failed to parse initial cancel shortcut: {}", initial_cancel);
             }
 
+            // Notify backend to load the initial model after a short delay
+            let app_handle_model = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // Wait for backend to fully initialize
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+                let state: tauri::State<AppState> = app_handle_model.state();
+                let model = state.selected_model.lock().await.clone();
+                let device = state.selected_device.lock().await.clone();
+                let language = state.selected_language.lock().await.clone();
+
+                let client = reqwest::Client::new();
+                let lang_value = if language == "auto" {
+                    serde_json::Value::Null
+                } else {
+                    serde_json::json!(language)
+                };
+
+                match client.post("http://127.0.0.1:8000/load_model")
+                    .json(&serde_json::json!({
+                        "model_size": model,
+                        "device": device,
+                        "language": lang_value
+                    }))
+                    .send()
+                    .await
+                {
+                    Ok(resp) if resp.status().is_success() => {
+                        log::info!("✅ Initial model loaded: {} on {}", model, device);
+                    }
+                    Ok(resp) => {
+                        log::warn!("⚠️ Backend /load_model returned: {}", resp.status());
+                    }
+                    Err(e) => {
+                        log::warn!("⚠️ Failed to load initial model: {}", e);
+                    }
+                }
+            });
+
             log::info!("💡 Press F9 to start/stop recording");
             Ok(())
         })
-        .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             inject_text_directly,
             cmd_start_recording,
@@ -1014,8 +1319,8 @@ pub fn run() {
             get_cancel_shortcut,
             get_preferred_languages,
             set_preferred_languages,
-            get_launch_on_login,
-            set_launch_on_login,
+            get_launch_on_startup,
+            set_launch_on_startup,
             check_for_updates,
             restart_backend
         ])

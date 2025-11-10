@@ -927,11 +927,11 @@
 
                 <div class="config-row">
                     <div class="config-row-left">
-                        <div class="config-row-title">Launch on Login</div>
+                        <div class="config-row-title">Launch on Startup</div>
                         <div class="config-row-description">Start Whisper4Windows with Windows</div>
                     </div>
                     <div class="config-row-right">
-                        <div class="toggle-switch" id="launchOnLoginToggle" onclick="toggleLaunchOnLogin()"></div>
+                        <div class="toggle-switch" id="launchOnStartupToggle" onclick="toggleLaunchOnStartup()"></div>
                     </div>
                 </div>
             </div>
@@ -1050,7 +1050,7 @@
         const BACKEND_URL = 'http://127.0.0.1:8000';
         let selectedDevice = 'auto';
         let clipboardPasteEnabled = true;
-        let launchOnLogin = false;
+        let launchOnStartup = false;
         let autoVolumeEnabled = true;
         let soundEffectsEnabled = true;
         let volume = 80;
@@ -1310,11 +1310,11 @@
             }
         }
 
-        async function toggleLaunchOnLogin() {
-            const toggle = document.getElementById('launchOnLoginToggle');
-            launchOnLogin = !launchOnLogin;
+        async function toggleLaunchOnStartup() {
+            const toggle = document.getElementById('launchOnStartupToggle');
+            launchOnStartup = !launchOnStartup;
 
-            if (launchOnLogin) {
+            if (launchOnStartup) {
                 toggle.classList.add('active');
             } else {
                 toggle.classList.remove('active');
@@ -1322,9 +1322,9 @@
 
             try {
                 const { invoke } = window.__TAURI_INTERNALS__;
-                await invoke('set_launch_on_login', { enabled: launchOnLogin });
+                await invoke('set_launch_on_startup', { enabled: launchOnStartup });
             } catch (error) {
-                console.error('❌ Error setting launch on login:', error);
+                console.error('❌ Error setting launch on startup:', error);
             }
         }
 
@@ -1977,19 +1977,19 @@
                 console.error('❌ Error loading clipboard paste setting:', error);
             }
 
-            // Load launch on login setting
+            // Load launch on startup setting
             try {
                 const { invoke } = window.__TAURI_INTERNALS__;
-                const enabled = await invoke('get_launch_on_login');
-                launchOnLogin = enabled;
-                const toggle = document.getElementById('launchOnLoginToggle');
+                const enabled = await invoke('get_launch_on_startup');
+                launchOnStartup = enabled;
+                const toggle = document.getElementById('launchOnStartupToggle');
                 if (enabled) {
                     toggle.classList.add('active');
                 } else {
                     toggle.classList.remove('active');
                 }
             } catch (error) {
-                console.error('❌ Error loading launch on login setting:', error);
+                console.error('❌ Error loading launch on startup setting:', error);
             }
 
             // Load sound settings from localStorage
