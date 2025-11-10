@@ -707,7 +707,7 @@
                         <div class="card-title">Start recording</div>
                         <div class="card-description">Turn your voice to text with a single click.</div>
                     </div>
-                    <div class="card-badge">F9</div>
+                    <div class="card-badge" id="home-shortcut-badge">Ctrl+\</div>
                 </div>
 
                 <div class="card" onclick="navigateToPage('configuration', 'shortcuts')">
@@ -733,18 +733,18 @@
             </div>
 
             <div class="changelog-item">
-                <div class="changelog-date">Oct 2, 2025</div>
-                <div class="changelog-title">F9 Global Hotkey & Live Audio Visualization</div>
+                <div class="changelog-date">Nov 10, 2025</div>
+                <div class="changelog-title">99 Language Support & Auto-Detection</div>
                 <div class="changelog-description">
-                    Press F9 from anywhere to start/stop recording. New 80-bar live audio visualizer shows real-time feedback during recording, with smooth wave animation during processing.
+                    Whisper4Windows now supports transcription in 99 languages including English, Spanish, French, German, Chinese, Japanese, Arabic, and many more. Auto-detection intelligently identifies the spoken language, or manually select your preferred language for optimal accuracy.
                 </div>
             </div>
 
             <div class="changelog-item">
-                <div class="changelog-date">Oct 1, 2025</div>
+                <div class="changelog-date">OCT 20, 2025</div>
                 <div class="changelog-title">GPU Acceleration & Fast Text Injection</div>
                 <div class="changelog-description">
-                    10x faster transcription with NVIDIA GPU support. Text now injects instantly via clipboard paste instead of character-by-character. Global Esc key cancels recording anytime.
+                    10x faster transcription with NVIDIA GPU support. Text now injects instantly via clipboard paste instead of character-by-character. Customizable global shortcuts let you control recording from anywhere.
                 </div>
             </div>
         </div>
@@ -773,7 +773,7 @@
                     </div>
                     <div class="config-row-right">
                         <span class="reset-icon" onclick="resetShortcut('toggle')">↻</span>
-                        <div class="shortcut-badge" id="shortcut-toggle" onclick="captureShortcut('toggle')">F9</div>
+                        <div class="shortcut-badge" id="shortcut-toggle" onclick="captureShortcut('toggle')">Ctrl+\</div>
                     </div>
                 </div>
 
@@ -921,7 +921,7 @@
                         <div class="config-row-description">Check for latest GitHub release</div>
                     </div>
                     <div class="config-row-right">
-                        <button class="btn" onclick="checkForUpdates()">Check for Updates...</button>
+                        <button class="btn" onclick="checkForUpdates()" disabled>Check for Updates...</button>
                     </div>
                 </div>
 
@@ -951,8 +951,8 @@
                         <div class="config-row-description">Select microphone input</div>
                     </div>
                     <div class="config-row-right">
-                        <div class="custom-dropdown" id="microphoneDropdown">
-                            <div class="dropdown-header" onclick="toggleMicrophoneDropdown()">
+                        <div class="custom-dropdown" id="microphoneDropdown" style="opacity: 0.5; pointer-events: none;">
+                            <div class="dropdown-header">
                                 <span id="selectedMicrophone">Default Microphone</span>
                             </div>
                             <div class="dropdown-content" id="microphoneDropdownContent">
@@ -1089,7 +1089,7 @@
 
         // Shortcut state
         let shortcuts = {
-            toggle: 'F9',
+            toggle: 'Ctrl+\\',
             cancel: 'Escape'
         };
         let capturingShortcut = null;
@@ -1147,10 +1147,12 @@
         }
 
         function resetShortcut(type) {
-            const defaults = { toggle: 'F9', cancel: 'Escape' };
+            const defaults = { toggle: 'Ctrl+\\', cancel: 'Escape' };
             shortcuts[type] = defaults[type];
             document.getElementById(`shortcut-${type}`).textContent = defaults[type];
             saveShortcuts();
+            // Update UI consistency after save
+            updateAllShortcutDisplays();
         }
 
         async function saveShortcuts() {
@@ -1158,8 +1160,30 @@
                 const { invoke } = window.__TAURI_INTERNALS__;
                 await invoke('save_shortcuts', { shortcuts: shortcuts });
                 console.log('✅ Shortcuts saved:', shortcuts);
+                // Update UI consistency after save
+                updateAllShortcutDisplays();
             } catch (error) {
                 console.error('❌ Error saving shortcuts:', error);
+            }
+        }
+
+        // UI Consistency Layer - Update all shortcut displays across windows
+        function updateAllShortcutDisplays() {
+            // Update home page badge (only for toggle shortcut)
+            const homeBadge = document.getElementById('home-shortcut-badge');
+            if (homeBadge) {
+                homeBadge.textContent = shortcuts.toggle;
+            }
+
+            // Update config page badges (already updated by the capture logic)
+            // This is a safety net in case they get out of sync
+            document.getElementById('shortcut-toggle').textContent = shortcuts.toggle;
+            document.getElementById('shortcut-cancel').textContent = shortcuts.cancel;
+
+            // Sync to recording window
+            const recordingWin = window.__TAURI_INTERNALS__.webviewWindow.getByLabel('recording');
+            if (recordingWin) {
+                recordingWin.eval(`if (typeof syncShortcutsFromRust === 'function') { syncShortcutsFromRust('${shortcuts.toggle}', '${shortcuts.cancel}'); }`);
             }
         }
 
@@ -1352,11 +1376,21 @@
             }
 
             localStorage.setItem('soundEffects', soundEffectsEnabled);
+            syncSoundSettingsToRecordingWindow();
         }
 
         function updateVolume() {
             volume = document.getElementById('volumeSlider').value;
             localStorage.setItem('volume', volume);
+            syncSoundSettingsToRecordingWindow();
+        }
+
+        // Sync sound settings to recording window
+        function syncSoundSettingsToRecordingWindow() {
+            const recordingWin = window.__TAURI_INTERNALS__.webviewWindow.getByLabel('recording');
+            if (recordingWin) {
+                recordingWin.eval(`if (typeof syncSoundSettings === 'function') { syncSoundSettings(${soundEffectsEnabled}, ${volume}); }`);
+            }
         }
 
         // Language dropdown data (99 Whisper languages)
@@ -2029,8 +2063,11 @@
             try {
                 const { invoke } = window.__TAURI_INTERNALS__;
                 const toggleShortcut = await invoke('get_toggle_shortcut');
+                const cancelShortcut = await invoke('get_cancel_shortcut');
                 shortcuts.toggle = toggleShortcut;
-                document.getElementById('shortcut-toggle').textContent = toggleShortcut;
+                shortcuts.cancel = cancelShortcut;
+                // Use UI consistency layer to update all displays
+                updateAllShortcutDisplays();
             } catch (error) {
                 console.error('❌ Error loading shortcuts:', error);
             }

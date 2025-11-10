@@ -181,8 +181,8 @@
             <!-- Bars will be created dynamically -->
         </div>
         <div class="buttons">
-            <button class="stop-btn" onclick="stopRecording()">Stop   F9</button>
-            <button class="cancel-btn" onclick="cancelRecording()">Cancel   Esc</button>
+            <button class="stop-btn" id="stopBtn" onclick="stopRecording()">Stop   Ctrl+\</button>
+            <button class="cancel-btn" id="cancelBtn" onclick="cancelRecording()">Cancel   Esc</button>
         </div>
         
         <!-- Debug panel (only visible in console) -->
@@ -218,7 +218,12 @@
         }
 
         function playBeep(frequency, duration) {
-            if (!soundEffectsEnabled) return;
+            console.log(`🔊 playBeep called: soundEffectsEnabled=${soundEffectsEnabled}, volume=${soundVolume}`);
+
+            if (!soundEffectsEnabled) {
+                console.log('🔇 Sound disabled, skipping beep');
+                return;
+            }
 
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -238,7 +243,7 @@
                 oscillator.start(audioCtx.currentTime);
                 oscillator.stop(audioCtx.currentTime + duration);
 
-                console.log(`🔊 Played ${frequency}Hz beep for ${duration}s at volume ${adjustedVolume.toFixed(2)}`);
+                console.log(`✅ Played ${frequency}Hz beep for ${duration}s at volume ${adjustedVolume.toFixed(2)}`);
             } catch (error) {
                 console.error('❌ Error playing sound:', error);
             }
@@ -621,6 +626,29 @@
             }
         };
 
+        // Sync shortcuts from main window
+        window.syncShortcutsFromRust = function(toggleShortcut, cancelShortcut) {
+            console.log('🔄 Syncing shortcuts from Rust:', toggleShortcut, cancelShortcut);
+            const stopBtn = document.getElementById('stopBtn');
+            const cancelBtn = document.getElementById('cancelBtn');
+            if (stopBtn) {
+                stopBtn.textContent = `Stop   ${toggleShortcut}`;
+            }
+            if (cancelBtn) {
+                cancelBtn.textContent = `Cancel   ${cancelShortcut}`;
+            }
+        };
+
+        // Sync sound settings from main window
+        window.syncSoundSettings = function(enabled, volume) {
+            console.log('🔄 Syncing sound settings:', enabled, volume);
+            soundEffectsEnabled = enabled;
+            soundVolume = volume / 100;
+            // Also update localStorage so it persists
+            localStorage.setItem('soundEffects', enabled);
+            localStorage.setItem('volume', volume);
+        };
+
         // Load current model from state
         async function loadModelFromState() {
             try {
@@ -634,6 +662,43 @@
                 }
             } catch (error) {
                 console.error('❌ Error loading model from state:', error);
+            }
+        }
+
+        // Load current shortcuts from state
+        async function loadShortcutsFromState() {
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                const toggleShortcut = await invoke('get_toggle_shortcut');
+                const cancelShortcut = await invoke('get_cancel_shortcut');
+                console.log('📥 Loaded shortcuts from state:', toggleShortcut, cancelShortcut);
+
+                // Directly update the buttons
+                const stopBtn = document.getElementById('stopBtn');
+                const cancelBtn = document.getElementById('cancelBtn');
+                if (stopBtn) {
+                    stopBtn.textContent = `Stop   ${toggleShortcut}`;
+                    console.log('✅ Updated stop button to:', toggleShortcut);
+                }
+                if (cancelBtn) {
+                    cancelBtn.textContent = `Cancel   ${cancelShortcut}`;
+                    console.log('✅ Updated cancel button to:', cancelShortcut);
+                }
+            } catch (error) {
+                console.error('❌ Error loading shortcuts from state:', error);
+            }
+        }
+
+        // Load sound settings from state
+        function loadSoundSettingsFromState() {
+            try {
+                const savedSoundEffects = localStorage.getItem('soundEffects');
+                const savedVolume = localStorage.getItem('volume');
+                soundEffectsEnabled = savedSoundEffects !== 'false';
+                soundVolume = savedVolume ? parseInt(savedVolume) / 100 : 0.8;
+                console.log('📥 Loaded sound settings:', soundEffectsEnabled, soundVolume);
+            } catch (e) {
+                console.warn('Could not load sound settings:', e);
             }
         }
 
@@ -742,6 +807,13 @@
         // Initialize on load
         initVisualizer();
         loadModelFromState(); // Load the current model setting
+
+        // Use setTimeout to ensure DOM is fully ready before loading shortcuts
+        setTimeout(() => {
+            loadShortcutsFromState(); // Load the current shortcuts
+            loadSoundSettingsFromState(); // Load sound settings
+        }, 100);
+
         console.log('✅ Recording window loaded');
         console.log('✅ Visualizer initialized with', bars.length, 'bars');
         console.log('🎨 TEMPORARY: Using hardcoded audio visualizer');
@@ -767,8 +839,10 @@
                     console.log('🌟 First show detected');
                     isFirstShow = false;
                 }
-                // Load current model setting and reset to recording state
+                // Load current model, shortcuts, and sound settings, then reset to recording state
                 loadModelFromState();
+                loadShortcutsFromState();
+                loadSoundSettingsFromState();
                 // Small delay to ensure window is fully shown
                 setTimeout(() => {
                 resetToRecording();

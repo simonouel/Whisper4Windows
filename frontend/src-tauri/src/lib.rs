@@ -42,7 +42,7 @@ impl Default for Settings {
             selected_microphone: None,
             use_clipboard: true,
             selected_language: "auto".to_string(),
-            toggle_shortcut: "F9".to_string(),
+            toggle_shortcut: "Ctrl+\\".to_string(),
             cancel_shortcut: "Escape".to_string(),
         }
     }

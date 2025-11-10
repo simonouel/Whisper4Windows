@@ -65,3 +65,7 @@ logo_backup/
 *.dylib
 
 Whisper4Windows_0.1.0_x64_en-US.msi
+.dockerignore
+compose.yaml
+Dockerfile
+README.Docker.md
