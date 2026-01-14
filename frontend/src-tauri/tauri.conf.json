@@ -31,8 +31,7 @@
     },
     "trayIcon": {
       "iconPath": "icons/256x256.png",
-      "iconAsTemplate": false,
-      "menuOnLeftClick": false
+      "iconAsTemplate": false
     }
   },
   "bundle": {
@@ -55,7 +54,9 @@
         "language": "en-US"
       },
       "nsis": {
-        "languages": ["English"],
+        "languages": [
+          "English"
+        ],
         "displayLanguageSelector": false
       }
     }

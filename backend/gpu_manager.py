@@ -44,9 +44,35 @@ def get_gpu_libs_dir() -> Path:
 
 def is_gpu_available() -> bool:
     """Check if GPU (CUDA) is available on this system"""
+    # Method 1: Use ctranslate2 directly - most reliable since we need it anyway
     try:
-        # Don't import ctranslate2 here - it triggers CUDA loading
-        # Instead, check if NVIDIA GPU exists via Windows
+        import ctranslate2
+        cuda_count = ctranslate2.get_cuda_device_count()
+        if cuda_count > 0:
+            logger.info(f"✅ GPU detected via ctranslate2: {cuda_count} CUDA device(s)")
+            return True
+    except Exception as e:
+        logger.debug(f"ctranslate2 GPU check failed: {e}")
+
+    # Method 2: Use PowerShell Get-CimInstance (Windows 10/11 compatible, wmic is deprecated)
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['powershell', '-Command', 'Get-CimInstance -ClassName Win32_VideoController | Select-Object -ExpandProperty Name'],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+        )
+        output = result.stdout.lower()
+        if 'nvidia' in output or 'geforce' in output or 'quadro' in output or 'rtx' in output:
+            logger.info(f"✅ NVIDIA GPU detected via PowerShell")
+            return True
+    except Exception as e:
+        logger.debug(f"PowerShell GPU check failed: {e}")
+
+    # Method 3: Fallback to wmic for older Windows versions
+    try:
         import subprocess
         result = subprocess.run(
             ['wmic', 'path', 'win32_VideoController', 'get', 'name'],
@@ -55,10 +81,14 @@ def is_gpu_available() -> bool:
             timeout=5
         )
         output = result.stdout.lower()
-        return 'nvidia' in output or 'geforce' in output or 'quadro' in output
+        if 'nvidia' in output or 'geforce' in output or 'quadro' in output:
+            logger.info(f"✅ NVIDIA GPU detected via wmic")
+            return True
     except Exception as e:
-        logger.debug(f"GPU check failed: {e}")
-        return False
+        logger.debug(f"wmic GPU check failed: {e}")
+
+    logger.warning("⚠️ No NVIDIA GPU detected by any method")
+    return False
 
 
 def check_library_status() -> Dict[str, any]:
@@ -357,9 +387,42 @@ def uninstall_gpu_libs() -> bool:
         return False
 
 
+def is_cuda_working() -> bool:
+    """Check if CUDA is actually working via ctranslate2 (regardless of how libs are installed)"""
+    try:
+        import ctranslate2
+        cuda_count = ctranslate2.get_cuda_device_count()
+        if cuda_count > 0:
+            # Also verify we can get compute types for CUDA
+            compute_types = ctranslate2.get_supported_compute_types('cuda')
+            if compute_types:
+                logger.info(f"✅ CUDA is working: {cuda_count} device(s), compute types: {compute_types}")
+                return True
+    except Exception as e:
+        logger.debug(f"CUDA working check failed: {e}")
+    return False
+
+
 def get_gpu_info() -> Dict:
     """Get information about GPU and library status"""
     gpu_available = is_gpu_available()
+    
+    # First check if CUDA is already working (system installation or bundled)
+    cuda_working = is_cuda_working() if gpu_available else False
+    
+    if cuda_working:
+        # CUDA works! No need to check for bundled libraries
+        return {
+            "gpu_available": True,
+            "libs_installed": True,
+            "cuda_source": "system",  # Indicates system CUDA is being used
+            "library_status": {},
+            "missing_libraries": [],
+            "libs_dir": str(get_gpu_libs_dir()),
+            "estimated_download_size_mb": get_download_size() // (1024 * 1024)
+        }
+    
+    # CUDA not working via system - check bundled libraries
     library_status = check_library_status() if gpu_available else {}
     all_installed = are_gpu_libs_installed() if gpu_available else False
 
@@ -369,8 +432,10 @@ def get_gpu_info() -> Dict:
     return {
         "gpu_available": gpu_available,
         "libs_installed": all_installed,
+        "cuda_source": "bundled" if all_installed else "none",
         "library_status": library_status,
         "missing_libraries": missing_libraries,
         "libs_dir": str(get_gpu_libs_dir()),
         "estimated_download_size_mb": get_download_size() // (1024 * 1024)
     }
+

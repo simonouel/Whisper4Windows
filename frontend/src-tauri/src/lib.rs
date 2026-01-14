@@ -42,7 +42,7 @@ impl Default for Settings {
             selected_microphone: None,
             use_clipboard: true,
             selected_language: "auto".to_string(),
-            toggle_shortcut: "Ctrl+\\".to_string(),
+            toggle_shortcut: "F9".to_string(),
             cancel_shortcut: "Escape".to_string(),
         }
     }
@@ -1114,28 +1114,31 @@ pub fn run() {
             // Store state in app
             app.manage(app_state);
 
-            // Start backend sidecar
-            log::info!("🔧 Starting backend server...");
+            // Start backend sidecar (or skip if not bundled - dev mode)
+            log::info!("🔧 Checking for backend sidecar...");
             use tauri_plugin_shell::ShellExt;
 
-            let sidecar_command = app.app_handle()
-                .shell()
-                .sidecar("whisper-backend")
-                .expect("Failed to create sidecar command");
-
-            let (_rx, child) = sidecar_command
-                .spawn()
-                .expect("Failed to spawn backend sidecar");
-
-            // Store the child process in state so we can kill it on app exit
-            let state: tauri::State<AppState> = app.state();
-            tauri::async_runtime::block_on(async {
-                *state.backend_child.lock().await = Some(child);
-            });
-
-            // Wait a moment for backend to start
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            log::info!("✅ Backend server started");
+            match app.app_handle().shell().sidecar("whisper-backend") {
+                Ok(sidecar_command) => {
+                    match sidecar_command.spawn() {
+                        Ok((_rx, child)) => {
+                            // Store the child process in state so we can kill it on app exit
+                            let state: tauri::State<AppState> = app.state();
+                            tauri::async_runtime::block_on(async {
+                                *state.backend_child.lock().await = Some(child);
+                            });
+                            std::thread::sleep(std::time::Duration::from_secs(1));
+                            log::info!("✅ Backend sidecar started");
+                        }
+                        Err(e) => {
+                            log::warn!("⚠️ Backend sidecar not available: {} (dev mode - start backend manually)", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::warn!("⚠️ Backend sidecar not found: {} (dev mode - start backend manually with: python main.py)", e);
+                }
+            }
 
             // Create recording window
             WebviewWindowBuilder::new(app, "recording", tauri::WebviewUrl::App("recording.html".into()))
