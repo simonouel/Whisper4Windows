@@ -602,7 +602,15 @@ async fn get_clipboard_paste(state: State<'_, AppState>) -> Result<bool, String>
 
 // PROXY COMMAND for audio level (Bypasses WebView CORS/Security)
 #[tauri::command]
-async fn get_audio_level_proxy() -> Result<f64, String> {
+async fn get_audio_level_proxy(app: AppHandle) -> Result<f64, String> {
+    // Optimization: Check if recording window is visible
+    if let Some(win) = app.get_webview_window("recording") {
+        if !win.is_visible().unwrap_or(false) {
+            // Window is hidden, no need to poll backend
+            return Ok(0.0);
+        }
+    }
+
     // log::info!("🔌 Proxy invoked"); // Comment out to avoid spam if working, but needed for debug now
     
     let client = reqwest::Client::builder()
