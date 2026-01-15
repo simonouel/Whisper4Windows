@@ -43,6 +43,7 @@ class AudioCapture:
         self._is_recording = False
         self.audio_queue = queue.Queue()
         self.stream = None
+        self._last_level = 0.0  # Track latest audio level for visualizer
     
     def is_recording(self) -> bool:
         """Check if currently recording"""
@@ -102,13 +103,27 @@ class AudioCapture:
             logger.warning(f"⚠️ Audio callback status: {status}")
         
         try:
-            # Put audio data in queue
+            if len(indata) > 0:
+                # Software Gain Boost (x50) to ensure we see SOMETHING
+                # Many Windows mics are very quiet on raw input
+                boosted = indata * 50.0
+                
+                # Peak level for visualization
+                self._last_level = float(np.max(np.abs(boosted)))
+            
+            # Put ORIGINAL audio data in queue (don't clip the transcription)
             self.audio_queue.put(indata.copy())
-            # Log occasionally to confirm audio is flowing
-            if self.audio_queue.qsize() % 10 == 0:
-                logger.info(f"📊 Audio queue size: {self.audio_queue.qsize()}")
+            
+            # Log occasionally (every ~1s)
+            if self.audio_queue.qsize() % 20 == 0:
+                logger.info(f"🎤 Input Level: {self._last_level:.4f} (Boosted x50)")
         except Exception as e:
             logger.error(f"❌ Audio callback error: {e}")
+    
+    def get_current_level(self) -> float:
+        """Get the latest audio level"""
+        # Return the last peak level directly
+        return self._last_level
     
     def start_recording(self, device_index: Optional[int] = None, duration: Optional[float] = None):
         """

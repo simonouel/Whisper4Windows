@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, AppHandle, State,
+    Manager, AppHandle, State, Emitter,
 };
 use windows::Win32::{
     UI::Input::KeyboardAndMouse::{
@@ -316,6 +316,12 @@ async fn cmd_start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
             win.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())?;
         }
 
+        // FORCE RELOAD to clear any stale state (overlays, vars) - NUCLEAR OPTION
+        win.eval("window.location.reload()").map_err(|e| e.to_string())?;
+        
+        // Small delay to allow reload to start
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
         win.show().map_err(|e| e.to_string())?;
 
         // Play start sound
@@ -381,6 +387,7 @@ async fn cmd_cancel_recording(app: AppHandle) -> Result<(), String> {
 
     // Hide window
     if let Some(win) = app.get_webview_window("recording") {
+        let _ = win.emit("recording-hidden", ());
         win.hide().map_err(|e| e.to_string())?;
         log::info!("✅ Window hidden");
     }
@@ -438,6 +445,7 @@ async fn cmd_stop_recording(app: AppHandle, state: State<'_, AppState>) -> Resul
 
     // Hide window FIRST (to restore focus to text field)
     if let Some(win) = app.get_webview_window("recording") {
+        let _ = win.emit("recording-hidden", ());
         win.hide().map_err(|e| e.to_string())?;
         log::info!("✅ Window hidden");
     }
@@ -590,6 +598,39 @@ async fn set_clipboard_paste(
 async fn get_clipboard_paste(state: State<'_, AppState>) -> Result<bool, String> {
     let enabled = *state.use_clipboard.lock().await;
     Ok(enabled)
+}
+
+// PROXY COMMAND for audio level (Bypasses WebView CORS/Security)
+#[tauri::command]
+async fn get_audio_level_proxy() -> Result<f64, String> {
+    // log::info!("🔌 Proxy invoked"); // Comment out to avoid spam if working, but needed for debug now
+    
+    let client = reqwest::Client::builder()
+        .no_proxy() // Important for localhost
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
+
+    match client.get("http://127.0.0.1:8000/audio_level")
+        .timeout(std::time::Duration::from_millis(500)) // Increase timeout
+        .send()
+        .await 
+    {
+        Ok(resp) => {
+             if let Ok(json) = resp.json::<serde_json::Value>().await {
+                 let level = json["level"].as_f64().unwrap_or(0.0);
+                 Ok(level)
+             } else {
+                 Ok(0.0)
+             }
+        }
+        Err(e) => {
+            // Only log errors that are NOT timeouts to avoid spamming if backend is just slow
+            if !e.is_timeout() {
+                log::warn!("🔌 Proxy request error: {}", e);
+            }
+            Ok(0.0)
+        }
+    }
 }
 
 // Language commands
@@ -1076,9 +1117,8 @@ pub fn run() {
             // Logging
             app.handle().plugin(
                 tauri_plugin_log::Builder::default()
-                    .level(log::LevelFilter::Info)
+                    .level(log::LevelFilter::Warn)
                     .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout))
-                    .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { file_name: Some("app".to_string()) }))
                     .build(),
             )?;
 
@@ -1114,44 +1154,41 @@ pub fn run() {
             // Store state in app
             app.manage(app_state);
 
-            // Start backend sidecar (or skip if not bundled - dev mode)
-            log::info!("🔧 Checking for backend sidecar...");
-            use tauri_plugin_shell::ShellExt;
-
-            match app.app_handle().shell().sidecar("whisper-backend") {
-                Ok(sidecar_command) => {
-                    match sidecar_command.spawn() {
-                        Ok((_rx, child)) => {
-                            // Store the child process in state so we can kill it on app exit
-                            let state: tauri::State<AppState> = app.state();
-                            tauri::async_runtime::block_on(async {
-                                *state.backend_child.lock().await = Some(child);
-                            });
-                            std::thread::sleep(std::time::Duration::from_secs(1));
-                            log::info!("✅ Backend sidecar started");
-                        }
-                        Err(e) => {
-                            log::warn!("⚠️ Backend sidecar not available: {} (dev mode - start backend manually)", e);
-                        }
-                    }
-                }
-                Err(e) => {
-                    log::warn!("⚠️ Backend sidecar not found: {} (dev mode - start backend manually with: python main.py)", e);
-                }
-            }
+            // Start backend sidecar (DISABLED FOR DEV: We want to use the local python main.py)
+            // match app.app_handle().shell().sidecar("whisper-backend") {
+            //     Ok(sidecar_command) => {
+            //         match sidecar_command.spawn() {
+            //             Ok((_rx, child)) => {
+            //                 // Store the child process in state so we can kill it on app exit
+            //                 let state: tauri::State<AppState> = app.state();
+            //                 tauri::async_runtime::block_on(async {
+            //                     *state.backend_child.lock().await = Some(child);
+            //                 });
+            //                 std::thread::sleep(std::time::Duration::from_secs(1));
+            //                 log::info!("✅ Backend sidecar started");
+            //             }
+            //             Err(e) => {
+            //                 log::warn!("⚠️ Backend sidecar not available: {} (dev mode - start backend manually)", e);
+            //             }
+            //         }
+            //     }
+            //     Err(e) => {
+            //         log::warn!("⚠️ Backend sidecar not found: {} (dev mode - start backend manually with: python main.py)", e);
+            //     }
+            // }
+            log::warn!("⚠️ Sidecar disabled. Please run 'python main.py' in a separate terminal.");
 
             // Create recording window
             WebviewWindowBuilder::new(app, "recording", tauri::WebviewUrl::App("recording.html".into()))
                 .title("Recording")
-                .inner_size(616.0, 140.0)
+                .inner_size(600.0, 200.0)
                 .resizable(false)
-                .position(0.0, 50.0)  // Will be centered horizontally when shown
                 .always_on_top(true)
                 .visible(false)
                 .skip_taskbar(true)
                 .decorations(false)
                 .transparent(true)
-                .focused(false)
+                .shadow(false)
                 .build()?;
 
             log::info!("✅ Recording window created");
@@ -1325,7 +1362,8 @@ pub fn run() {
             get_launch_on_startup,
             set_launch_on_startup,
             check_for_updates,
-            restart_backend
+            restart_backend,
+            get_audio_level_proxy
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

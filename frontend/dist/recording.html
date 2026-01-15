@@ -1,861 +1,320 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recording...</title>
+    <!-- CACHE BUSTING -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Recording V2</title>
     <style>
-        * {
+        html,
+        body {
+            background: transparent !important;
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: transparent;
             overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             width: 100vw;
             height: 100vh;
-        }
-
-        .container {
-            background: #1a1a1a;
-            border-radius: 16px;
-            padding: 16px 20px;
-            width: 616px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.9);
-            border: 1px solid #2a2a2a;
-        }
-
-        .top-section {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 12px;
+            justify-content: center;
         }
 
-        .recording-indicator {
+        .window-frame {
+            background: #1e1e20;
+            border: 1px solid #444;
+            /* Slightly lighter border to see it clearly */
+            border-radius: 20px;
+            width: 500px;
+            height: 140px;
+            padding: 20px;
+            box-shadow: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .status-header {
             display: flex;
             align-items: center;
-            gap: 8px;
+            justify-content: center;
+            gap: 10px;
         }
 
-        .dot {
+        .rec-dot {
             width: 8px;
             height: 8px;
-            background: #3b82f6;
+            background: #ff453a;
             border-radius: 50%;
-            animation: pulse 1.5s ease-in-out infinite;
+            box-shadow: 0 0 8px #ff453a;
+            animation: pulse 1.5s infinite ease-in-out;
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(0.9); }
-        }
+            0% {
+                opacity: 0.5;
+                transform: scale(0.9);
+            }
 
-        .model-selector {
-            flex: 1;
-        }
+            50% {
+                opacity: 1;
+                transform: scale(1.2);
+            }
 
-        .model-dropdown {
-            background: transparent;
-            border: 1px solid #3a3a3a;
-            border-radius: 6px;
-            padding: 6px 10px;
-            color: #999;
-            font-size: 12px;
-            cursor: pointer;
-            width: auto;
-            max-width: 180px;
-            outline: none;
-            transition: all 0.2s;
-        }
-
-        .model-dropdown:hover {
-            border-color: #4a4a4a;
-            color: #bbb;
-        }
-
-        .model-dropdown:focus {
-            border-color: #3b82f6;
+            100% {
+                opacity: 0.5;
+                transform: scale(0.9);
+            }
         }
 
         .status-text {
-            color: #666;
+            color: #ff453a;
             font-size: 11px;
-            margin-left: auto;
+            font-weight: 800;
+            letter-spacing: 2px;
+            text-transform: uppercase;
         }
 
         .visualizer-container {
-            background: transparent;
-            border-radius: 8px;
-            padding: 12px 0;
-            margin-bottom: 12px;
-            height: 60px;
+            flex-grow: 1;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 2px;
+            gap: 4px;
+            margin-top: 10px;
         }
 
-        .visualizer-bar {
-            width: 3px;
-            background: #3b82f6;
-            border-radius: 1.5px;
-            transition: height 0.08s ease;
-            height: 3px;
-            min-height: 3px;
+        .bar {
+            width: 5px;
+            background: #0a84ff;
+            border-radius: 10px;
+            height: 4px;
+            min-height: 4px;
+            /* Ensure visible even at 0 */
+            transition: height 0.05s linear;
         }
 
-        .loading .visualizer-bar {
-            animation: wave 1.2s ease-in-out infinite;
+        /* OVERLAY - DEFAULT HIDDEN HARD */
+        .transcription-overlay {
+            position: absolute;
+            inset: 0;
+            background: #1e1e20;
+            border-radius: 20px;
+            display: none;
+            /* Hidden by default */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            z-index: 100;
         }
 
-        @keyframes wave {
-            0%, 100% { height: 3px; }
-            50% { height: 30px; }
+        /* Only show when strictly active */
+        .transcription-overlay.active {
+            display: flex !important;
         }
 
-        .buttons {
-            display: flex;
-            gap: 16px;
-            justify-content: flex-end;
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(10, 132, 255, 0.2);
+            border-top-color: #0a84ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
         }
 
-        button {
-            padding: 6px 16px;
-            border: none;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 400;
-            cursor: pointer;
-            transition: all 0.2s;
-            background: transparent;
-            color: #666;
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
 
-        button:hover {
-            color: #999;
-        }
-
-        .stop-btn {
-            border: 1px solid #3a3a3a;
-        }
-
-        .stop-btn:hover {
-            border-color: #4a4a4a;
-        }
-
-        .cancel-btn {
-            border: 1px solid #2a2a2a;
-        }
-
-        .cancel-btn:hover {
-            border-color: #3a3a3a;
+        .spinner-label {
+            color: #0a84ff;
+            font-size: 13px;
+            font-weight: 600;
         }
     </style>
 </head>
+
 <body>
-    <div class="container">
-        <div class="top-section">
-            <div class="recording-indicator">
-                <div class="dot"></div>
-            </div>
-            <div class="model-selector">
-                <select class="model-dropdown" id="modelSelect">
-                    <option value="tiny">Tiny</option>
-                    <option value="base">Base</option>
-                    <option value="small" selected>Small</option>
-                    <option value="medium">Medium</option>
-                    <option value="large-v3">Large V3</option>
-                    <option value="large-v3-turbo">Large V3 Turbo</option>
-                </select>
-            </div>
-            <div class="status-text" id="statusText">Recording...</div>
+    <div class="window-frame">
+        <div class="transcription-overlay" id="overlay">
+            <div class="spinner"></div>
+            <div class="spinner-label">Transcribing...</div>
         </div>
-        <div class="visualizer-container" id="visualizer">
-            <!-- Bars will be created dynamically -->
+
+        <div class="status-header">
+            <div class="rec-dot"></div>
+            <div class="status-text">Recording</div>
+            <div id="debug-lvl" style="position: absolute; right: 10px; font-size: 10px; color: #666; display: none;">
+                Lvl: 0.00</div>
         </div>
-        <div class="buttons">
-            <button class="stop-btn" id="stopBtn" onclick="stopRecording()">Stop   Ctrl+\</button>
-            <button class="cancel-btn" id="cancelBtn" onclick="cancelRecording()">Cancel   Esc</button>
-        </div>
-        
-        <!-- Debug panel (only visible in console) -->
-        <div style="display: none;">
-            <button onclick="debugBackendAudio()" id="debugBtn">🔍 Debug Backend</button>
-            <button onclick="debugWebRTCAudio()" id="webrtcBtn">🎤 Test WebRTC</button>
-            <button onclick="testHardcodedVisualizer()" id="hardcodedBtn">🎨 Test Hardcoded</button>
+
+        <div class="visualizer-container" id="viz">
+            <!-- Bars -->
         </div>
     </div>
 
     <script>
-        const BACKEND_URL = 'http://127.0.0.1:8000';
-        let bars = [];
-        let audioLevelInterval = null;
-        let waveAnimationInterval = null;
-        
-        // State management
-        let currentState = 'idle'; // 'idle', 'recording', 'processing'
-        let isRecording = false;
+        const API = 'http://127.0.0.1:8000';
+        const BAR_COUNT = 40;
+        const bars = [];
+        let iv = null;
+        let isPollingEnabled = true;
 
-        // Sound Effects - using Web Audio API
-        let soundEffectsEnabled = true;
-        let soundVolume = 0.8;
+        // GLOBAL ERROR HANDLER - CRITICAL FOR DEBUGGING
+        window.onerror = function (msg, url, line) {
+            const debugEl = document.getElementById('debug-lvl');
+            if (debugEl) {
+                debugEl.textContent = `JS: ${msg}`;
+                debugEl.style.color = 'red';
+            }
+            return false;
+        };
 
-        // Load sound settings from localStorage
+        // TAURI API DETECTION
+        let invoke = null;
+        let getCurrentWindow = null;
+
         try {
-            const savedSoundEffects = localStorage.getItem('soundEffects');
-            const savedVolume = localStorage.getItem('volume');
-            soundEffectsEnabled = savedSoundEffects !== 'false';
-            soundVolume = savedVolume ? parseInt(savedVolume) / 100 : 0.8;
-        } catch (e) {
-            console.warn('Could not load sound settings:', e);
-        }
-
-        function playBeep(frequency, duration) {
-            console.log(`🔊 playBeep called: soundEffectsEnabled=${soundEffectsEnabled}, volume=${soundVolume}`);
-
-            if (!soundEffectsEnabled) {
-                console.log('🔇 Sound disabled, skipping beep');
-                return;
-            }
-
-            try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
-
-                oscillator.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-
-                oscillator.frequency.value = frequency;
-                oscillator.type = 'sine';
-
-                const adjustedVolume = soundVolume * 0.3; // Max 30% volume
-                gainNode.gain.setValueAtTime(adjustedVolume, audioCtx.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-
-                oscillator.start(audioCtx.currentTime);
-                oscillator.stop(audioCtx.currentTime + duration);
-
-                console.log(`✅ Played ${frequency}Hz beep for ${duration}s at volume ${adjustedVolume.toFixed(2)}`);
-            } catch (error) {
-                console.error('❌ Error playing sound:', error);
-            }
-        }
-
-        function playStartSound() {
-            playBeep(800, 0.1); // Higher pitch, short beep
-        }
-
-        function playStopSound() {
-            playBeep(400, 0.15); // Lower pitch, slightly longer beep
-        }
-
-        // Audio visualizer implementation - completely rewritten
-        let audioContext = null;
-        let analyser = null;
-        let microphone = null;
-        let dataArray = null;
-        let useWebRTC = false; // Fallback method
-
-        // Initialize visualizer bars
-        function initVisualizer() {
-            const visualizer = document.getElementById('visualizer');
-            const barCount = 80;  // Reduced for narrower window
-
-            for (let i = 0; i < barCount; i++) {
-                const bar = document.createElement('div');
-                bar.className = 'visualizer-bar';
-                visualizer.appendChild(bar);
-                bars.push(bar);
-            }
-        }
-
-        // TEMPORARY: Hardcoded audio visualizer that simulates realistic audio levels
-        let hardcodedVisualizerInterval = null;
-        let hardcodedBaseLevel = 0;
-        let hardcodedVariation = 0;
-        
-        function startHardcodedVisualizer() {
-            console.log('🎨 Starting HARDCODED visualizer for debug');
-            
-            if (hardcodedVisualizerInterval) {
-                clearInterval(hardcodedVisualizerInterval);
-            }
-            
-            // Simulate realistic speech patterns
-            hardcodedBaseLevel = Math.random() * 0.3 + 0.1; // Base level between 0.1-0.4
-            hardcodedVariation = Math.random() * 0.15 + 0.05; // Variation between 0.05-0.2
-            
-            hardcodedVisualizerInterval = setInterval(() => {
-                if (currentState !== 'recording') {
-                    clearInterval(hardcodedVisualizerInterval);
-                    hardcodedVisualizerInterval = null;
-                    return;
-                }
-                
-                const time = Date.now() / 300; // Slower wave for speech-like patterns
-                
-                bars.forEach((bar, index) => {
-                    // Create speech-like peaks and valleys
-                    const baseWave = Math.sin(time + index * 0.1);
-                    
-                    // Add random spikes for speech bursts
-                    const speechSpike = Math.random() < 0.02 ? Math.random() * 0.4 : 0;
-                    
-                    // Create frequency-like distribution (lower bars move more)
-                    const positionFactor = (bars.length - index) / bars.length;
-                    
-                    // Calculate final level
-                    let level = hardcodedBaseLevel + (baseWave * hardcodedVariation * positionFactor) + speechSpike;
-                    
-                    // Occasionally add silences (speech pauses)
-                    if (Math.random() < 0.01) {
-                        level = 0.05; // Brief silence
-                    }
-                    
-                    // Clip to realistic range
-                    level = Math.max(0.05, Math.min(0.7, level));
-                    
-                    // Convert to bar height
-                    const height = Math.max(3, level * 45);
-                    bar.style.height = `${height}px`;
-                });
-            }, 80); // Update every 80ms for smooth animation
-        }
-        
-        function stopHardcodedVisualizer() {
-            if (hardcodedVisualizerInterval) {
-                clearInterval(hardcodedVisualizerInterval);
-                hardcodedVisualizerInterval = null;
-            }
-        }
-
-        // NEW: Test backend audio level endpoint
-        async function testBackendAudioLevel() {
-            console.log('🔍 Testing backend audio level endpoint...');
-            try {
-                const response = await fetch(`${BACKEND_URL}/audio_level`);
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('📊 Backend audio level response:', data);
-                    return data;
-                } else {
-                    console.error('❌ Backend audio level failed:', response.status);
-                    return null;
-                }
-            } catch (error) {
-                console.error('❌ Backend audio level error:', error);
-                return null;
-            }
-        }
-
-        // NEW: Initialize WebRTC audio visualizer (fallback)
-        async function initWebRTCAudio() {
-            console.log('🎤 Initializing WebRTC audio...');
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        echoCancellation: false,
-                        noiseSuppression: false,
-                        autoGainControl: false
-                    } 
-                });
-                
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioContext.createAnalyser();
-                microphone = audioContext.createMediaStreamSource(stream);
-                
-                analyser.fftSize = 256;
-                analyser.smoothingTimeConstant = 0.8;
-                dataArray = new Uint8Array(analyser.frequencyBinCount);
-                
-                microphone.connect(analyser);
-                
-                console.log('✅ WebRTC audio initialized');
-                return true;
-            } catch (error) {
-                console.error('❌ WebRTC audio failed:', error);
-                return false;
-            }
-        }
-
-        // NEW: Get audio level from WebRTC
-        function getWebRTCAudioLevel() {
-            if (!analyser || !dataArray) return 0;
-            
-            analyser.getByteFrequencyData(dataArray);
-            
-            // Calculate average amplitude
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) {
-                sum += dataArray[i];
-            }
-            const average = sum / dataArray.length;
-            
-            // Normalize to 0-1
-            return average / 255;
-        }
-
-        // Poll backend for audio levels (improved)
-        async function pollAudioLevels() {
-            if (currentState !== 'recording') {
-                return; // Only poll when recording
-            }
-
-            let level = 0;
-
-            if (useWebRTC) {
-                // Use WebRTC fallback
-                level = getWebRTCAudioLevel();
-                console.log(`🎤 WebRTC audio level: ${level.toFixed(3)}`);
+            if (window.__TAURI__ && window.__TAURI__.core) {
+                invoke = window.__TAURI__.core.invoke;
+                // V2 window API
+                getCurrentWindow = window.__TAURI__.window.getCurrentWindow;
+            } else if (window.__TAURI__ && window.__TAURI__.tauri) {
+                invoke = window.__TAURI__.tauri.invoke;
+                // V1 window API fallback
+                getCurrentWindow = () => window.__TAURI__.window.appWindow;
+            } else if (window.__TAURI_INTERNALS__) {
+                // Fallback to internals if needed (dirty)
+                invoke = window.__TAURI_INTERNALS__.invoke;
+                getCurrentWindow = () => ({ isVisible: () => Promise.resolve(true) }); // Mock for safety
             } else {
-                // Try backend first
+                throw new Error("Tauri API not found");
+            }
+        } catch (e) {
+            document.getElementById('debug-lvl').textContent = "NO API";
+        }
+
+        function createBars() {
+            const container = document.getElementById('viz');
+            container.innerHTML = '';
+            bars.length = 0;
+            for (let i = 0; i < BAR_COUNT; i++) {
+                const b = document.createElement('div');
+                b.className = 'bar';
+                container.appendChild(b);
+                bars.push(b);
+            }
+        }
+
+        async function updateBars() {
+            try {
+                if (!invoke) return;
+
+                let rawLevel = 0;
                 try {
-                    const response = await fetch(`${BACKEND_URL}/audio_level`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        level = data.level || 0;
-                        
-                        // Log occasionally to verify it's working
-                        if (Math.random() < 0.1) { // 10% of the time for better debugging
-                            console.log(`🎙️ Backend audio level: ${level.toFixed(3)}, recording: ${data.recording}, queue: ${data.queue_size}`);
-                        }
-                    } else {
-                        console.warn('⚠️ Backend audio level failed, switching to WebRTC fallback');
-                        useWebRTC = true;
-                        await initWebRTCAudio();
-                        return;
-                    }
-                } catch (error) {
-                    console.warn('⚠️ Backend not responding, switching to WebRTC fallback');
-                    useWebRTC = true;
-                    await initWebRTCAudio();
+                    rawLevel = await invoke('get_audio_level_proxy');
+                } catch (proxyError) {
+                    console.error(proxyError);
+                    document.getElementById('debug-lvl').textContent = "P-ERR";
                     return;
                 }
-            }
-            
-            updateVisualizerFromLevel(level);
-        }
 
-        // Update visualizer from audio level
-        function updateVisualizerFromLevel(level) {
-            bars.forEach((bar, index) => {
-                // Create wave pattern based on level
-                const offset = (index / bars.length) * Math.PI * 4;
-                const wave = Math.sin(offset + Date.now() / 200) * 0.3 + 0.7;
-                const height = Math.max(3, level * 40 * wave);
-                bar.style.height = `${height}px`;
-            });
-        }
+                // Update debug text
+                document.getElementById('debug-lvl').textContent = `Px: ${rawLevel.toFixed(3)}`;
+                document.getElementById('debug-lvl').style.color = '#666';
 
-        // State management functions
-        async function setState(newState) {
-            console.log(`🔄 State change: ${currentState} → ${newState}`);
-            currentState = newState;
-            await updateUI();
-        }
+                // Sensitivity hardcoded to 0.3 as per user preference
+                const sens = 0.3;
 
-        async function updateUI() {
-            // Clear all animations first
-            if (audioLevelInterval) {
-                clearInterval(audioLevelInterval);
-                audioLevelInterval = null;
-            }
-            if (waveAnimationInterval) {
-                clearInterval(waveAnimationInterval);
-                waveAnimationInterval = null;
-            }
-            
-            // TEMPORARY: Stop hardcoded visualizer
-            stopHardcodedVisualizer();
-            
-            // Stop WebRTC if switching away from recording
-            if (currentState !== 'recording' && audioContext) {
-                try {
-                    audioContext.close();
-                    audioContext = null;
-                    analyser = null;
-                    microphone = null;
-                    dataArray = null;
-                    useWebRTC = false;
-                    console.log('🔇 WebRTC audio stopped');
-                } catch (e) {
-                    console.warn('WebRTC cleanup error:', e);
-                }
-            }
+                // Enhance raw level with sensitivity, clamp 0-1
+                const visualLevel = Math.min(1.0, rawLevel * sens);
 
-            switch (currentState) {
-                case 'recording':
-                    document.getElementById('statusText').textContent = 'Recording...';
-                    await startAudioVisualizer();
-                    break;
-                case 'processing':
-                    document.getElementById('statusText').textContent = 'Processing...';
-                    startProcessingAnimation();
-                    break;
-                case 'idle':
-                default:
-                    document.getElementById('statusText').textContent = 'Ready...';
-                    resetBars();
-                    break;
-            }
-        }
-
-        async function startAudioVisualizer() {
-            console.log('🎤 Starting audio visualizer');
-            
-            // TEMPORARY: Always use hardcoded visualizer
-            console.log('🎨 TEMPORARY: Using hardcoded visualizer for debugging');
-            startHardcodedVisualizer();
-            
-            // TODO: Re-enable real audio polling when backend audio_level endpoint is fixed
-            // Test backend first
-            // const backendTest = await testBackendAudioLevel();
-            // if (backendTest && backendTest.recording === false) {
-            //     console.log('📊 Backend is available but not recording yet, this is expected');
-            // } else if (!backendTest) {
-            //     console.log('⚠️ Backend not available, will try WebRTC fallback when needed');
-            // }
-            // 
-            // // Start polling
-            // audioLevelInterval = setInterval(pollAudioLevels, 100);
-        }
-
-        function startProcessingAnimation() {
-            console.log('🌊 Starting processing animation');
-            let waveOffset = 0;
-            waveAnimationInterval = setInterval(() => {
-                if (currentState !== 'processing') {
-                    clearInterval(waveAnimationInterval);
-                    waveAnimationInterval = null;
-                    return;
-                }
-                bars.forEach((bar, index) => {
-                    const delay = (index / bars.length) * Math.PI * 2;
-                    const height = 10 + Math.sin(waveOffset + delay) * 12 + 12;
-                    bar.style.height = `${height}px`;
+                bars.forEach((bar, i) => {
+                    const dist = Math.abs(i - BAR_COUNT / 2) / (BAR_COUNT / 2);
+                    const shape = 1 - (dist * 0.8);
+                    const h = 4 + (visualLevel * 60 * shape * (0.8 + Math.random() * 0.4));
+                    bar.style.height = `${h}px`;
                 });
-                waveOffset += 0.15;
-            }, 50);
-        }
 
-        function resetBars() {
-            bars.forEach(bar => {
-                bar.style.height = '3px';
-            });
-        }
+                document.querySelector('.window-frame').style.borderColor = '#444';
 
-        // Show processing state (called by Rust)
-        function showProcessing() {
-            console.log('🌊 SHOWING PROCESSING ANIMATION (called by Rust)');
-            setState('processing');
-        }
-
-        // Stop and transcribe
-        async function stopRecording() {
-            console.log('🛑 Stop button clicked');
-            playStopSound(); // Play sound when stopping
-            setState('processing');
-
-            let transcribedText = null;
-
-            try {
-                const response = await fetch(`${BACKEND_URL}/stop`, { method: 'POST' });
-                const data = await response.json();
-
-                if (data.status === 'success' && data.text) {
-                    console.log('✅ Transcription:', data.text);
-                    transcribedText = data.text;
-                }
-            } catch (error) {
-                console.error('❌ Stop error:', error);
-            }
-
-            // Hide window FIRST (to restore focus)
-            const { webviewWindow, invoke } = window.__TAURI_INTERNALS__;
-            await webviewWindow.getCurrent().hide();
-            console.log('✅ Window hidden');
-
-            // Wait for focus to return to text field
-            await new Promise(resolve => setTimeout(resolve, 150));
-
-            // THEN inject text (always inject, clipboard setting controls saving)
-            if (transcribedText) {
-                try {
-                    const saveToClipboard = await invoke('get_clipboard_paste');
-                    console.log(`📋 Injecting text (save to clipboard: ${saveToClipboard})`);
-                    await invoke('inject_text_directly', { 
-                        text: transcribedText,
-                        saveToClipboard: saveToClipboard 
-                    });
-                } catch (error) {
-                    console.error('❌ Injection error:', error);
-                }
-            }
-        }
-
-        // Cancel recording
-        async function cancelRecording() {
-            console.log('❌ Cancel button clicked');
-
-            try {
-                await fetch(`${BACKEND_URL}/cancel`, { method: 'POST' });
-            } catch (error) {
-                console.error('❌ Cancel error:', error);
-            }
-
-            // Hide window
-            const { webviewWindow } = window.__TAURI_INTERNALS__;
-            await webviewWindow.getCurrent().hide();
-            console.log('✅ Window hidden');
-        }
-
-        // Sync model from Rust (called when other window changes it)
-        window.syncModelFromRust = function(modelValue) {
-            console.log('🔄 Syncing model from Rust:', modelValue);
-            const select = document.getElementById('modelSelect');
-            if (select) {
-                select.value = modelValue;
-            }
-        };
-
-        // Sync shortcuts from main window
-        window.syncShortcutsFromRust = function(toggleShortcut, cancelShortcut) {
-            console.log('🔄 Syncing shortcuts from Rust:', toggleShortcut, cancelShortcut);
-            const stopBtn = document.getElementById('stopBtn');
-            const cancelBtn = document.getElementById('cancelBtn');
-            if (stopBtn) {
-                stopBtn.textContent = `Stop   ${toggleShortcut}`;
-            }
-            if (cancelBtn) {
-                cancelBtn.textContent = `Cancel   ${cancelShortcut}`;
-            }
-        };
-
-        // Sync sound settings from main window
-        window.syncSoundSettings = function(enabled, volume) {
-            console.log('🔄 Syncing sound settings:', enabled, volume);
-            soundEffectsEnabled = enabled;
-            soundVolume = volume / 100;
-            // Also update localStorage so it persists
-            localStorage.setItem('soundEffects', enabled);
-            localStorage.setItem('volume', volume);
-        };
-
-        // Load current model from state
-        async function loadModelFromState() {
-            try {
-                const { invoke } = window.__TAURI_INTERNALS__;
-                const [model, device] = await invoke('get_model_and_device');
-                console.log('📥 Loaded model from state:', model);
-
-                const select = document.getElementById('modelSelect');
-                if (select) {
-                    select.value = model;
-                }
-            } catch (error) {
-                console.error('❌ Error loading model from state:', error);
-            }
-        }
-
-        // Load current shortcuts from state
-        async function loadShortcutsFromState() {
-            try {
-                const { invoke } = window.__TAURI_INTERNALS__;
-                const toggleShortcut = await invoke('get_toggle_shortcut');
-                const cancelShortcut = await invoke('get_cancel_shortcut');
-                console.log('📥 Loaded shortcuts from state:', toggleShortcut, cancelShortcut);
-
-                // Directly update the buttons
-                const stopBtn = document.getElementById('stopBtn');
-                const cancelBtn = document.getElementById('cancelBtn');
-                if (stopBtn) {
-                    stopBtn.textContent = `Stop   ${toggleShortcut}`;
-                    console.log('✅ Updated stop button to:', toggleShortcut);
-                }
-                if (cancelBtn) {
-                    cancelBtn.textContent = `Cancel   ${cancelShortcut}`;
-                    console.log('✅ Updated cancel button to:', cancelShortcut);
-                }
-            } catch (error) {
-                console.error('❌ Error loading shortcuts from state:', error);
-            }
-        }
-
-        // Load sound settings from state
-        function loadSoundSettingsFromState() {
-            try {
-                const savedSoundEffects = localStorage.getItem('soundEffects');
-                const savedVolume = localStorage.getItem('volume');
-                soundEffectsEnabled = savedSoundEffects !== 'false';
-                soundVolume = savedVolume ? parseInt(savedVolume) / 100 : 0.8;
-                console.log('📥 Loaded sound settings:', soundEffectsEnabled, soundVolume);
             } catch (e) {
-                console.warn('Could not load sound settings:', e);
+                document.getElementById('debug-lvl').textContent = "ERR";
             }
         }
 
-        // Model selection handler
-        document.getElementById('modelSelect').addEventListener('change', async (e) => {
-            const model = e.target.value;
-            console.log('📝 Model selected:', model);
+        window.showProcessing = () => {
+            document.getElementById('overlay').classList.add('active');
+            if (iv) clearInterval(iv);
+        };
 
-            // Send to backend via Tauri command
-            const { invoke } = window.__TAURI_INTERNALS__;
+        // VISIBILITY LOOP
+        let lastVis = false;
+
+        async function checkVisibility() {
+            if (!getCurrentWindow) return; // Safety
+
             try {
-                await invoke('set_model_and_device', {
-                    model: model,
-                    device: 'auto'
+                // Handle different window API shapes
+                const w = getCurrentWindow();
+                // V2 might return object directly, V1 returns promise sometimes? 
+                // Let's assume standard V2: getCurrentWindow() returns Window object.
+                // V2 window API standard
+                const isWindowVisible = await w.isVisible();
+                // Check DOM visibility too (redundant but safe) AND explicit polling flag
+                const vis = isWindowVisible && !document.hidden && isPollingEnabled;
+
+                if (vis && !lastVis) {
+                    // FORCE RESET UI
+                    createBars();
+                    document.getElementById('overlay').classList.remove('active');
+                    document.querySelector('.window-frame').style.borderColor = '#444';
+
+                    if (iv) clearInterval(iv);
+                    iv = setInterval(updateBars, 50);
+                } else if (!vis && lastVis) {
+                    if (iv) clearInterval(iv);
+                    document.getElementById('overlay').classList.remove('active');
+                }
+                lastVis = vis;
+            } catch (e) {
+                // Ignore visibility errors in loop
+            }
+        }
+
+        if (getCurrentWindow) {
+            setInterval(checkVisibility, 150);
+        } else {
+            // Fallback: just run it mostly
+            createBars();
+            iv = setInterval(updateBars, 50);
+        }
+
+        createBars();
+        // Event Listener for robust hiding
+        try {
+            if (window.__TAURI__ && window.__TAURI__.event) {
+                window.__TAURI__.event.listen('recording-hidden', () => {
+                    isPollingEnabled = false;
+                    if (iv) clearInterval(iv);
+                    createBars();
+                    document.getElementById('debug-lvl').textContent = "PAUSED";
                 });
-                console.log('✅ Model updated');
-            } catch (error) {
-                console.error('❌ Model update error:', error);
             }
-        });
-
-        // Escape key cancels
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                cancelRecording();
-            }
-        });
-
-        // Reset to recording state
-        function resetToRecording() {
-            console.log('🔄 Resetting to recording state');
-            playStartSound(); // Play sound when recording starts
-            setState('recording');
+        } catch (e) {
+            console.error("Event setup failed", e);
         }
 
-        // Debug functions (accessible from console)
-        window.debugBackendAudio = async function() {
-            console.log('🔍 === BACKEND AUDIO DEBUG ===');
-            
-            // Test health endpoint
-            try {
-                const health = await fetch(`${BACKEND_URL}/health`);
-                const healthData = await health.json();
-                console.log('🏥 Backend health:', healthData);
-            } catch (e) {
-                console.error('❌ Backend health failed:', e);
-            }
-            
-            // Test audio level endpoint
-            for (let i = 0; i < 5; i++) {
-                try {
-                    const response = await fetch(`${BACKEND_URL}/audio_level`);
-                    const data = await response.json();
-                    console.log(`📊 Audio level ${i+1}:`, data);
-                } catch (e) {
-                    console.error(`❌ Audio level ${i+1} failed:`, e);
-                }
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
-        };
-        
-        window.debugWebRTCAudio = async function() {
-            console.log('🎤 === WEBRTC AUDIO DEBUG ===');
-            
-            const success = await initWebRTCAudio();
-            if (success) {
-                console.log('✅ WebRTC initialized, testing for 5 seconds...');
-                for (let i = 0; i < 50; i++) {
-                    const level = getWebRTCAudioLevel();
-                    if (i % 10 === 0) {
-                        console.log(`🎤 WebRTC level ${i/10 + 1}:`, level.toFixed(3));
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
-            }
-        };
-        
-        window.testHardcodedVisualizer = function() {
-            console.log('🎨 === HARDCODED VISUALIZER DEBUG ===');
-            
-            // Set to recording state temporarily to test
-            const originalState = currentState;
-            console.log(`Current state: ${originalState}`);
-            
-            // Force recording state for test
-            currentState = 'recording';
-            startHardcodedVisualizer();
-            
-            console.log('✅ Hardcoded visualizer started! You should see animated bars.');
-            console.log('📊 Bars will simulate speech patterns with:');
-            console.log('   - Base level between 0.1-0.4');
-            console.log('   - Random speech spikes');
-            console.log('   - Position-based frequency distribution');
-            console.log('   - Occasional silences');
-            
-            // Auto-stop after 10 seconds
-            setTimeout(() => {
-                stopHardcodedVisualizer();
-                currentState = originalState;
-                resetBars();
-                console.log('⏰ Hardcoded visualizer test completed');
-            }, 10000);
-        };
-
-        // Initialize on load
-        initVisualizer();
-        loadModelFromState(); // Load the current model setting
-
-        // Use setTimeout to ensure DOM is fully ready before loading shortcuts
-        setTimeout(() => {
-            loadShortcutsFromState(); // Load the current shortcuts
-            loadSoundSettingsFromState(); // Load sound settings
-        }, 100);
-
-        console.log('✅ Recording window loaded');
-        console.log('✅ Visualizer initialized with', bars.length, 'bars');
-        console.log('🎨 TEMPORARY: Using hardcoded audio visualizer');
-        console.log('🔧 Debug commands available:');
-        console.log('   testHardcodedVisualizer() - Test the hardcoded visualizer');
-        console.log('   debugBackendAudio() - Test backend audio endpoint');
-        console.log('   debugWebRTCAudio() - Test WebRTC audio fallback');
-
-        // Track previous visibility state
-        let wasVisible = false;
-        let isFirstShow = true;
-
-        // Poll visibility to start/stop monitoring
-        setInterval(async () => {
-            const { webviewWindow } = window.__TAURI_INTERNALS__;
-            const currentWindow = webviewWindow.getCurrent();
-            const isVisible = await currentWindow.isVisible();
-
-            // Window just became visible
-            if (isVisible && !wasVisible) {
-                console.log('📺 Window became visible - resetting to recording state');
-                if (isFirstShow) {
-                    console.log('🌟 First show detected');
-                    isFirstShow = false;
-                }
-                // Load current model, shortcuts, and sound settings, then reset to recording state
-                loadModelFromState();
-                loadShortcutsFromState();
-                loadSoundSettingsFromState();
-                // Small delay to ensure window is fully shown
-                setTimeout(() => {
-                resetToRecording();
-                }, 100);
-            }
-            // Window just became hidden
-            else if (!isVisible && wasVisible) {
-                console.log('🙈 Window hidden - setting to idle state');
-                setState('idle');
-            }
-
-            wasVisible = isVisible;
-        }, 300);  // Check more frequently (every 300ms instead of 500ms)
+        document.getElementById('overlay').classList.remove('active');
     </script>
 </body>
+
 </html>

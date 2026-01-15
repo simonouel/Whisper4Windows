@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="system">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -142,7 +143,7 @@
 
         .card:hover {
             border-color: #c0c0c0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         }
 
         .card-icon {
@@ -315,8 +316,15 @@
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
         }
 
         /* Select Dropdown */
@@ -382,7 +390,7 @@
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             max-height: 300px;
             overflow-y: auto;
             z-index: 100;
@@ -523,7 +531,7 @@
 
         .status-indicator:hover {
             transform: scale(1.02);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .status-indicator.offline {
@@ -669,6 +677,7 @@
         }
     </style>
 </head>
+
 <body>
     <!-- Sidebar -->
     <div class="sidebar">
@@ -722,7 +731,8 @@
                     <span class="card-icon">📖</span>
                     <div class="card-content">
                         <div class="card-title">Add vocabulary</div>
-                        <div class="card-description">Teach Whisper4Windows custom words, names, or industry terms.</div>
+                        <div class="card-description">Teach Whisper4Windows custom words, names, or industry terms.
+                        </div>
                     </div>
                 </div>
             </div>
@@ -736,7 +746,9 @@
                 <div class="changelog-date">Nov 10, 2025</div>
                 <div class="changelog-title">99 Language Support & Auto-Detection</div>
                 <div class="changelog-description">
-                    Whisper4Windows now supports transcription in 99 languages including English, Spanish, French, German, Chinese, Japanese, Arabic, and many more. Auto-detection intelligently identifies the spoken language, or manually select your preferred language for optimal accuracy.
+                    Whisper4Windows now supports transcription in 99 languages including English, Spanish, French,
+                    German, Chinese, Japanese, Arabic, and many more. Auto-detection intelligently identifies the spoken
+                    language, or manually select your preferred language for optimal accuracy.
                 </div>
             </div>
 
@@ -744,7 +756,9 @@
                 <div class="changelog-date">OCT 20, 2025</div>
                 <div class="changelog-title">GPU Acceleration & Fast Text Injection</div>
                 <div class="changelog-description">
-                    10x faster transcription with NVIDIA GPU support. Text now injects instantly via clipboard paste instead of character-by-character. Customizable global shortcuts let you control recording from anywhere.
+                    10x faster transcription with NVIDIA GPU support. Text now injects instantly via clipboard paste
+                    instead of character-by-character. Customizable global shortcuts let you control recording from
+                    anywhere.
                 </div>
             </div>
         </div>
@@ -754,7 +768,8 @@
             <h1 class="section-title">Vocabulary</h1>
             <div class="coming-soon">
                 <h3>🚧 Coming Soon</h3>
-                <p>Custom vocabulary feature is under development. You'll soon be able to teach Whisper4Windows custom words, names, and industry-specific terms.</p>
+                <p>Custom vocabulary feature is under development. You'll soon be able to teach Whisper4Windows custom
+                    words, names, and industry-specific terms.</p>
             </div>
         </div>
 
@@ -773,7 +788,8 @@
                     </div>
                     <div class="config-row-right">
                         <span class="reset-icon" onclick="resetShortcut('toggle')">↻</span>
-                        <div class="shortcut-badge" id="shortcut-toggle" onclick="captureShortcut('toggle')">Ctrl+\</div>
+                        <div class="shortcut-badge" id="shortcut-toggle" onclick="captureShortcut('toggle')">Ctrl+\
+                        </div>
                     </div>
                 </div>
 
@@ -807,10 +823,12 @@
                 <div class="config-row">
                     <div class="config-row-left">
                         <div class="config-row-title">Backend Status</div>
-                        <div class="config-row-description">Connection to transcription engine (click to restart if offline)</div>
+                        <div class="config-row-description">Connection to transcription engine (click to restart if
+                            offline)</div>
                     </div>
                     <div class="config-row-right">
-                        <div class="status-indicator" id="backendStatus" onclick="handleBackendStatusClick()" style="cursor: pointer;">
+                        <div class="status-indicator" id="backendStatus" onclick="handleBackendStatusClick()"
+                            style="cursor: pointer;">
                             <span>⏳</span>
                             <span>Checking...</span>
                         </div>
@@ -841,7 +859,8 @@
                     </div>
                     <div class="config-row-right">
                         <div class="device-buttons">
-                            <button class="device-btn active" id="deviceAuto" onclick="selectDevice('auto')">Auto</button>
+                            <button class="device-btn active" id="deviceAuto"
+                                onclick="selectDevice('auto')">Auto</button>
                             <button class="device-btn" id="deviceGPU" onclick="selectDevice('cuda')">GPU</button>
                             <button class="device-btn" id="deviceCPU" onclick="selectDevice('cpu')">CPU</button>
                         </div>
@@ -880,7 +899,8 @@
                             </div>
                             <div class="dropdown-content" id="languageDropdownContent">
                                 <div class="dropdown-search">
-                                    <input type="text" placeholder="Search languages..." id="languageSearch" oninput="filterLanguages()">
+                                    <input type="text" placeholder="Search languages..." id="languageSearch"
+                                        oninput="filterLanguages()">
                                 </div>
                                 <div id="languageOptions"></div>
                             </div>
@@ -951,7 +971,8 @@
                         <div class="config-row-description">Select microphone input</div>
                     </div>
                     <div class="config-row-right">
-                        <div class="custom-dropdown" id="microphoneDropdown" style="opacity: 0.5; pointer-events: none;">
+                        <div class="custom-dropdown" id="microphoneDropdown"
+                            style="opacity: 0.5; pointer-events: none;">
                             <div class="dropdown-header">
                                 <span id="selectedMicrophone">Default Microphone</span>
                             </div>
@@ -961,6 +982,8 @@
                         </div>
                     </div>
                 </div>
+
+
 
                 <div class="config-row">
                     <div class="config-row-left">
@@ -993,7 +1016,8 @@
                         <div class="config-row-description">Sound effects volume level</div>
                     </div>
                     <div class="config-row-right">
-                        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="80" oninput="updateVolume()">
+                        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="80"
+                            oninput="updateVolume()">
                     </div>
                 </div>
             </div>
@@ -1004,7 +1028,8 @@
             <h1 class="section-title">History</h1>
             <div class="coming-soon">
                 <h3>🚧 Coming Soon</h3>
-                <p>Recording history feature is under development. You'll soon be able to view and manage past transcriptions.</p>
+                <p>Recording history feature is under development. You'll soon be able to view and manage past
+                    transcriptions.</p>
             </div>
         </div>
     </div>
@@ -1025,7 +1050,8 @@
     <div id="gpuSetupModal" class="modal-overlay hidden">
         <div class="modal" style="max-width: 500px;">
             <h3>🚀 GPU Detected!</h3>
-            <p>Your system has an NVIDIA GPU. Download GPU acceleration libraries (~600MB) for 5-10x faster transcription?</p>
+            <p>Your system has an NVIDIA GPU. Download GPU acceleration libraries (~600MB) for 5-10x faster
+                transcription?</p>
             <p style="font-size: 12px; color: var(--text-secondary); margin-top: 10px;">
                 <strong>With GPU:</strong> 5s audio → 0.5-2s transcription<br>
                 <strong>Without GPU:</strong> 5s audio → 5-15s transcription
@@ -1035,13 +1061,16 @@
             </p>
             <div id="gpuDownloadProgress" class="hidden" style="margin: 20px 0;">
                 <div style="background: var(--border-color); height: 8px; border-radius: 4px; overflow: hidden;">
-                    <div id="gpuProgressBar" style="background: #667eea; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                    <div id="gpuProgressBar"
+                        style="background: #667eea; height: 100%; width: 0%; transition: width 0.3s;"></div>
                 </div>
-                <p id="gpuProgressText" style="font-size: 13px; margin-top: 8px; color: var(--text-secondary);">Preparing...</p>
+                <p id="gpuProgressText" style="font-size: 13px; margin-top: 8px; color: var(--text-secondary);">
+                    Preparing...</p>
             </div>
             <div class="modal-buttons" id="gpuModalButtons">
                 <button class="btn" onclick="skipGPUSetup()">Skip</button>
-                <button class="btn" onclick="startGPUDownload()" style="background: #667eea; color: white; border-color: #667eea;">Download (~600MB)</button>
+                <button class="btn" onclick="startGPUDownload()"
+                    style="background: #667eea; color: white; border-color: #667eea;">Download (~600MB)</button>
             </div>
         </div>
     </div>
@@ -1638,7 +1667,7 @@
         }
 
         // Sync model from Rust (called when other window changes it)
-        window.syncModelFromRust = function(modelValue) {
+        window.syncModelFromRust = function (modelValue) {
             console.log('🔄 Syncing model from Rust:', modelValue);
             const model = MODELS.find(m => m.value === modelValue);
             if (model) {
@@ -1713,42 +1742,95 @@
         // Microphone dropdown
         let selectedMicrophoneValue = 'default';
 
-        function initializeMicrophoneDropdown() {
+        async function initializeMicrophoneDropdown() {
             const optionsContainer = document.getElementById('microphoneOptions');
+            const dropdown = document.getElementById('microphoneDropdown');
+
+            // Enable dropdown
+            dropdown.style.opacity = '1';
+            dropdown.style.pointerEvents = 'auto';
+
             optionsContainer.innerHTML = '';
 
-            // Default microphone option
+            try {
+                // Fetch devices from backend
+                const response = await fetch(`${BACKEND_URL}/devices`);
+                const data = await response.json();
+
+                // Add Default Option
+                addMicOption(optionsContainer, 'default', 'Default Microphone');
+
+                if (data.success && data.inputs) {
+                    data.inputs.forEach(device => {
+                        addMicOption(optionsContainer, device.id, device.name);
+                    });
+                }
+
+                // Load saved selection
+                const savedMic = localStorage.getItem('microphoneDevice') || 'default';
+                const savedName = localStorage.getItem('microphoneName') || 'Default Microphone';
+
+                // Verify if saved mic still exists (logic simplified for now)
+                selectedMicrophoneValue = savedMic;
+                document.getElementById('selectedMicrophone').textContent = savedName;
+
+                updateMicSelectionUI();
+
+            } catch (e) {
+                console.error("Failed to load devices", e);
+                optionsContainer.innerHTML = '<div class="dropdown-option">Failed to load devices</div>';
+            }
+        }
+
+        function addMicOption(container, value, name) {
             const option = document.createElement('div');
-            option.className = 'dropdown-option selected';
-            option.textContent = 'Default Microphone';
-            option.dataset.value = 'default';
-            option.onclick = () => selectMicrophone('default', 'Default Microphone');
-            optionsContainer.appendChild(option);
+            option.className = 'dropdown-option';
+            option.textContent = name;
+            option.dataset.value = value;
+            option.onclick = () => selectMicrophone(value, name);
+            container.appendChild(option);
         }
 
-        function toggleMicrophoneDropdown() {
-            const header = document.querySelector('#microphoneDropdown .dropdown-header');
-            const content = document.getElementById('microphoneDropdownContent');
-
-            header.classList.toggle('open');
-            content.classList.toggle('show');
-        }
-
-        function selectMicrophone(value, name) {
-            selectedMicrophoneValue = value;
-            document.getElementById('selectedMicrophone').textContent = name;
-
+        function updateMicSelectionUI() {
             document.querySelectorAll('#microphoneOptions .dropdown-option').forEach(opt => {
                 opt.classList.remove('selected');
-                if (opt.dataset.value === value) {
+                // Loose comparison for IDs
+                if (String(opt.dataset.value) === String(selectedMicrophoneValue)) {
                     opt.classList.add('selected');
                 }
             });
+        }
 
+        async function selectMicrophone(value, name) {
+            selectedMicrophoneValue = value;
+            document.getElementById('selectedMicrophone').textContent = name;
+            updateMicSelectionUI();
+
+            // Save to LocalStorage
+            localStorage.setItem('microphoneDevice', value);
+            localStorage.setItem('microphoneName', name);
+
+            // Notify Rust Backend
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                // Convert 'default' to null, explicit ID to integer
+                const deviceIndex = (value === 'default') ? null : parseInt(value);
+                await invoke('set_microphone_device', { deviceIndex: deviceIndex });
+                console.log("🎤 Backend notified of microphone change:", deviceIndex);
+            } catch (e) {
+                console.error("Failed to set microphone in backend", e);
+            }
+
+            // Close dropdown
             const header = document.querySelector('#microphoneDropdown .dropdown-header');
             const content = document.getElementById('microphoneDropdownContent');
             header.classList.remove('open');
             content.classList.remove('show');
+
+            // TODO: Notify backend about change ? 
+            // Currently backend reads "device_index" from StartRequest.
+            // We need to make sure frontend sends this index when starting record.
+            console.log("Microphone selected:", value);
         }
 
         // Close dropdowns when clicking outside
@@ -2109,6 +2191,8 @@
         // Export sound functions for overlay
         window.playStartSound = playStartSound;
         window.playStopSound = playStopSound;
+
     </script>
 </body>
+
 </html>
