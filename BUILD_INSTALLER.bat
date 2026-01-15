@@ -42,4 +42,3 @@ if exist "target\release\bundle\msi\*.msi" (
 
 cd ..\..
 echo.
-pause

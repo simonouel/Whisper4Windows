@@ -4,24 +4,37 @@ echo Building Whisper4Windows Backend Executable
 echo ============================================
 echo.
 
-REM Activate virtual environment
+REM Detect and Activate virtual environment
+if exist ".venv\Scripts\activate.bat" (
+    echo Activating root .venv...
+    call .venv\Scripts\activate.bat
+) else if exist "backend\venv\Scripts\activate.bat" (
+    echo Activating backend\venv...
+    cd backend
+    call venv\Scripts\activate.bat
+    cd ..
+) else (
+    echo ❌ Error: Virtual environment not found! 
+    echo Please create one with 'python -m venv .venv' in the root.
+    exit /b 1
+)
+
+REM Build the backend executable
+echo.
+echo Building backend executable...
 cd backend
-call venv\Scripts\activate
 
 REM Install PyInstaller if not already installed
 echo Installing PyInstaller...
 pip install pyinstaller
 
-REM Build the backend executable
-echo.
-echo Building backend executable...
 python build_backend.py
 
 REM Check if build was successful
 if exist "dist\whisper-backend.exe" (
     echo.
     echo ============================================
-    echo Build successful!
+    echo ✅ Build successful!
     echo Backend executable: backend\dist\whisper-backend.exe
     echo ============================================
 
@@ -32,9 +45,10 @@ if exist "dist\whisper-backend.exe" (
 ) else (
     echo.
     echo ============================================
-    echo Build failed! Check the output above for errors.
+    echo ❌ Build failed! Check the output above for errors.
     echo ============================================
+    exit /b 1
 )
 
+cd ..
 echo.
-pause
